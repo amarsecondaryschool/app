@@ -126,6 +126,17 @@
 
   V.dataHub = function (el) { A.tabs(el, [{ label: 'dh_import', render: importTab }, { label: 'dh_export', render: exportTab }]); };
 
+  /* IEMIS files list classes as 8, 9, ECD/PPC: create any missing class automatically */
+  async function ensureClasses(rows) {
+    var ci = (rows[0] || []).findIndex(function (h) { return String(h).toLowerCase().replace(/[^a-z0-9]/g, '') === 'class'; });
+    if (ci < 0) return;
+    var names = {}; rows.slice(1).forEach(function (r) { var v = String(r[ci] == null ? '' : r[ci]).trim(); if (v) names[/^\d+$/.test(v) ? 'Class ' + v : v] = 1; });
+    var sch = await A.school(), have = {};
+    (await A.lookups()).classes.forEach(function (c) { have[c.name.toLowerCase()] = 1; });
+    var add = Object.keys(names).filter(function (n) { return !have[n.toLowerCase()]; }).map(function (n) { var m = n.match(/\d+/); return { school_id: sch.id, name: n, level: m ? +m[0] : 0 }; });
+    if (add.length) must(await db.from('classes').upsert(add, { onConflict: 'school_id,name' }));
+  }
+
   async function importTab(box) {
     box.innerHTML = '<div class="note">' + esc(t('dh_import_note')) + '</div><select id="ie" class="search">' + IMPORTS.map(function (k) { return '<option value="' + k + '">' + esc(t('ent_' + k)) + '</option>'; }).join('') + '</select>' +
       '<div class="row mb"><button class="btn small" id="itpl">⬇ ' + esc(t('dh_template')) + '</button></div><div id="icols" class="muted xs mb"></div>' +
@@ -136,7 +147,7 @@
     $('#ifile', box).onchange = async function (ev) {
       var f = ev.target.files[0]; if (!f) return; var out = $('#ires', box); A.skeleton(out);
       try {
-        var entity = $('#ie', box).value, rows = await readFile(f), ctx = await buildCtx(), r = I.validate(entity, rows, ctx);
+        var entity = $('#ie', box).value, rows = await readFile(f), ctx = (entity === 'students' ? await ensureClasses(rows) : 0, await buildCtx()), r = I.validate(entity, rows, ctx);
         if (r.empty) { out.innerHTML = '<p class="err">' + esc(t('dh_empty')) + '</p>'; return; }
         if (r.missing.length) { out.innerHTML = '<p class="err">' + esc(t('dh_missing_cols')) + ': ' + esc(r.missing.join(', ')) + '</p>'; return; }
         var good = r.items.filter(function (i) { return i.ok; }), bad = r.items.filter(function (i) { return !i.ok; });
