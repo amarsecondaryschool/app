@@ -106,21 +106,24 @@
   var ENTITIES = {
     students: {
       columns: [
-        { key: 'student_code', aliases: ['studentid', 'id', 'regno', 'regdno', 'registrationno'], req: 1, ex: 'ST001' },
+        { key: 'student_code', aliases: ['studentid', 'id', 'regno', 'regdno', 'registrationno', 'studentiemisid', 'iemisid'], req: 1, ex: 'ST001' },
         { key: 'admission_no', aliases: ['admissionnumber', 'admissionno'], ex: 'AD-101' },
         { key: 'full_name', aliases: ['name', 'studentname', 'fullnameenglish'], req: 1, ex: 'Sita Sharma' },
-        { key: 'full_name_ne', aliases: ['nameneplai', 'fullnamenepali', 'nepaliname'], ex: 'सीता शर्मा' },
+        { key: 'full_name_ne', aliases: ['nameneplai', 'fullnamenepali', 'nepaliname', 'studentnameinnepali'], ex: 'सीता शर्मा' },
         { key: 'dob', aliases: ['dateofbirth', 'birthdate'], ex: '2012-03-04' },
         { key: 'gender', aliases: ['sex'], ex: 'female' },
         { key: 'blood_group', aliases: ['bloodgroup', 'blood'], ex: 'A+' },
-        { key: 'address', ex: 'Kathmandu' },
+        { key: 'address', aliases: ['permanentaddress'], ex: 'Kathmandu' },
+        { key: 'father_name', aliases: ['fathername'], ex: 'Hari Sharma' },
+        { key: 'mother_name', aliases: ['mothername'], ex: 'Gita Sharma' },
+        { key: 'is_transferred', aliases: ['istransferred'], ex: 'No' },
         { key: 'class', aliases: ['classname', 'grade'], ex: 'Class 8' },
         { key: 'section', ex: 'A' },
         { key: 'roll_no', aliases: ['roll', 'rollno', 'rollnumber'], ex: '7' },
         { key: 'admission_date', aliases: ['admissiondate'], ex: '2020-04-14' },
         { key: 'previous_school', aliases: ['previousschool'] },
         { key: 'guardian_name', aliases: ['guardian', 'parentname'], ex: 'Ram Sharma' },
-        { key: 'guardian_phone', aliases: ['guardiancontact', 'contact', 'contactno', 'phone'], ex: '9800000000' },
+        { key: 'guardian_phone', aliases: ['guardiancontact', 'guardiancontactnumber', 'contact', 'contactno', 'phone'], ex: '9800000000' },
         { key: 'emergency_phone', aliases: ['emergencycontact'] },
         { key: 'house', ex: 'BLUE - SAGARMATHA' },
         { key: 'emis_no', aliases: ['emis', 'emisno'] },
@@ -128,17 +131,20 @@
       ],
       check: function (r, ctx) {
         var code = need(r, 'student_code', 'Student ID'); dup(ctx, 'stu', lc(code));
-        var cls = findClass(ctx, r['class'], false), sec = findSection(ctx, cls, r.section);
+        var cn = txt(r['class']); if (/^\d+$/.test(cn)) cn = 'Class ' + cn;
+        var cls = findClass(ctx, cn, false), sec = findSection(ctx, cls, r.section);
+        var dobRaw = txt(r.dob), dobBs = null, dobAd = null, yr = parseInt(dobRaw.slice(0, 4), 10);
+        if (yr > 2030) dobBs = dobRaw.slice(0, 10); else dobAd = dateOf(r, 'dob');
         var g = txt(r.gender) ? GENDER[lc(r.gender)] : null;
         if (txt(r.gender) && !g) throw new Error('gender must be male, female or other');
-        var st = txt(r.status) ? STU_STATUS[lc(r.status)] : 'active';
+        var st = txt(r.status) ? STU_STATUS[lc(r.status)] : (yes(r.is_transferred) ? 'transferred' : 'active');
         if (!st) throw new Error('status must be active, transferred or archived');
-        return { student_code: code, admission_no: txt(r.admission_no) || null, full_name: need(r, 'full_name', 'Name'),
-          full_name_ne: txt(r.full_name_ne) || null, dob: dateOf(r, 'dob'), gender: g, blood_group: txt(r.blood_group) || null,
+        return { student_code: code, admission_no: txt(r.admission_no) || null, full_name: need(r, 'full_name', 'Name').replace(/\s+/g, ' '),
+          full_name_ne: txt(r.full_name_ne) || null, dob: dobAd, dob_bs: dobBs, father_name: txt(r.father_name).replace(/\s+/g, ' ') || null, mother_name: txt(r.mother_name).replace(/\s+/g, ' ') || null, gender: g, blood_group: txt(r.blood_group) || null,
           address: txt(r.address) || null, class_id: cls ? cls.id : null, section_id: sec ? sec.id : null,
           roll_no: numOf(r, 'roll_no', false, 0), admission_date: dateOf(r, 'admission_date'), previous_school: txt(r.previous_school) || null,
           guardian_name: txt(r.guardian_name) || null, guardian_phone: txt(r.guardian_phone) || null,
-          emergency_phone: txt(r.emergency_phone) || null, house: txt(r.house) || null, emis_no: txt(r.emis_no) || null, status: st };
+          emergency_phone: txt(r.emergency_phone) || null, house: txt(r.house) || null, emis_no: txt(r.emis_no) || (/^\d{10,}$/.test(code) ? code : null), status: st };
       }
     },
     teachers: {
