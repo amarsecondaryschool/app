@@ -15,6 +15,7 @@
   var state = { lang: 'en', profile: null, stack: [], timeoutMin: 15, timer: null, child: null, children: [] };
   var signed = {};
   var installEvt = null;
+  STR.en.more = STR.en.more || 'More'; if (STR.ne) STR.ne.more = STR.ne.more || 'थप';
 
   try { state.lang = localStorage.getItem('amar_lang') || 'en'; } catch (e) {}
 
@@ -380,48 +381,48 @@
   var ADMIN = [
     { k: 'student_records', i: '🎒', g: 'p', view: viewStudents },
     { k: 'teacher_records', i: '🧑‍🏫', g: 'p', view: viewTeachers },
-    { k: 'parent_info', i: '👨‍👩‍👧', g: 'p', view: viewParents },
-    { k: 'user_accounts', i: '🔑', g: 'p', view: viewAccounts },
+    { k: 'parent_info', more: 1, i: '👨‍👩‍👧', g: 'p', view: viewParents },
+    { k: 'user_accounts', more: 1, i: '🔑', g: 'p', view: viewAccounts },
     { k: 'class_mgmt', i: '🏫', g: 'a', view: viewClasses },
-    { k: 'subject_mgmt', i: '📚', g: 'a', view: viewSubjects },
+    { k: 'subject_mgmt', more: 1, i: '📚', g: 'a', view: viewSubjects },
     { k: 'attendance', i: '✅', g: 'a', name: 'attendance' },
     { k: 'marks_entry', i: '📝', g: 'a', name: 'exams' },
-    { k: 'grade_sheet', i: '🏅', g: 'a', name: 'gradeSheets' },
-    { k: 'auto_reports', i: '📄', g: 'a', name: 'reports' },
-    { k: 'homework', i: '📓', g: 'a', name: 'homework' },
-    { k: 'exam_routine', i: '🗓️', g: 'a', name: 'examRoutine' },
-    { k: 'class_routine', i: '⏰', g: 'a', name: 'timetable' },
+    { k: 'grade_sheet', more: 1, i: '🏅', g: 'a', name: 'gradeSheets' },
+    { k: 'auto_reports', more: 1, i: '📄', g: 'a', name: 'reports' },
+    { k: 'homework', more: 1, i: '📓', g: 'a', name: 'homework' },
+    { k: 'exam_routine', more: 1, i: '🗓️', g: 'a', name: 'examRoutine' },
+    { k: 'class_routine', more: 1, i: '⏰', g: 'a', name: 'timetable' },
     { k: 'fees', i: '💰', g: 'o', name: 'fees' },
     { k: 'notices', i: '📢', g: 'o', name: 'notices' },
-    { k: 'calendar', i: '📅', g: 'o', name: 'calendar' },
-    { k: 'library', i: '📖', g: 'o', name: 'library' },
-    { k: 'transport', i: '🚌', g: 'o', name: 'transport' },
-    { k: 'staff_leave', i: '🏖️', g: 'o', name: 'leave' },
+    { k: 'calendar', more: 1, i: '📅', g: 'o', name: 'calendar' },
+    { k: 'library', more: 1, i: '📖', g: 'o', name: 'library' },
+    { k: 'transport', more: 1, i: '🚌', g: 'o', name: 'transport' },
+    { k: 'staff_leave', more: 1, i: '🏖️', g: 'o', name: 'leave' },
     { k: 'import_export', i: '📥', g: 'd', name: 'dataHub' },
-    { k: 'settings', i: '⚙️', g: 'd', name: 'settings' }
+    { k: 'settings', more: 1, i: '⚙️', g: 'd', name: 'settings' }
   ];
   var TEACHER = [
-    { k: 'my_classes', i: '🏫', view: viewMyClasses },
+    { k: 'my_classes', more: 1, i: '🏫', view: viewMyClasses },
     { k: 'student_records', i: '🎒', view: function (el) { return viewStudents(el, true); } },
     { k: 'attendance', i: '✅', name: 'attendance' },
     { k: 'marks_entry', i: '📝', name: 'marksEntry' },
     { k: 'homework', i: '📓', name: 'homework' },
-    { k: 'class_routine', i: '⏰', name: 'timetable' },
+    { k: 'class_routine', more: 1, i: '⏰', name: 'timetable' },
     { k: 'notices', i: '📢', name: 'notices' },
-    { k: 'calendar', i: '📅', name: 'calendar' },
-    { k: 'staff_leave', i: '🏖️', name: 'leave' }
+    { k: 'calendar', more: 1, i: '📅', name: 'calendar' },
+    { k: 'staff_leave', more: 1, i: '🏖️', name: 'leave' }
   ];
   var PARENT = [
-    { k: 'teachers', i: '👩‍🏫', view: viewChildTeachers },
+    { k: 'teachers', more: 1, i: '👩‍🏫', view: viewChildTeachers },
     { k: 'homework', i: '📓', name: 'homework' },
     { k: 'attendance', i: '✅', name: 'attendance' },
     { k: 'examination', i: '📄', name: 'results' },
-    { k: 'exam_routine', i: '🗓️', name: 'examRoutine' },
+    { k: 'exam_routine', more: 1, i: '🗓️', name: 'examRoutine' },
     { k: 'account', i: '💰', name: 'fees' },
-    { k: 'library', i: '📖', name: 'library' },
-    { k: 'calendar', i: '📅', name: 'calendar' },
-    { k: 'timetable', i: '⏰', name: 'timetable' },
-    { k: 'transport', i: '🚌', name: 'transport' },
+    { k: 'library', more: 1, i: '📖', name: 'library' },
+    { k: 'calendar', more: 1, i: '📅', name: 'calendar' },
+    { k: 'timetable', more: 1, i: '⏰', name: 'timetable' },
+    { k: 'transport', more: 1, i: '🚌', name: 'transport' },
     { k: 'inbox', i: '🔔', name: 'inbox' }
   ];
   var GROUPS = { p: ['grp_people', 'g-blue'], a: ['grp_academics', 'g-green'], o: ['grp_operations', 'g-orange'], d: ['grp_data', 'g-purple'], x: ['', 'g-blue'] };
@@ -476,9 +477,11 @@
 
   async function tabHome(el) {
     var p = state.profile;
-    var list = p.role === 'admin' ? ADMIN : p.role === 'teacher' ? TEACHER : PARENT;
-    var search = p.role === 'admin' ? '<input class="search msearch" id="msearch" placeholder="🔍 ' + esc(t('search_menu')) + '">' : '';
-    el.innerHTML = '<div id="hdr"></div><div id="info"></div>' + search + '<h3 class="qa">' + esc(t('quick_access')) + '</h3>' + tiles(list, p.role === 'admin');
+    var full = p.role === 'admin' ? ADMIN : p.role === 'teacher' ? TEACHER : PARENT;
+    var rest = full.filter(function (f) { return f.more; }), list = full.filter(function (f) { return !f.more; });
+    if (rest.length) list.push({ k: 'more', i: '⋯', view: function (e) { e.innerHTML = tiles(rest, false); bindTiles(e, rest); } });
+    var search = '';
+    el.innerHTML = '<div id="hdr"></div><div id="info"></div>' + search + '' + tiles(list, false);
     bindTiles(el, list); bindMenuSearch(el);
     var hdr = $('#hdr', el), info = $('#info', el);
 
@@ -490,14 +493,8 @@
       $('#st', el).innerHTML =
         '<div><b>' + d.students + '</b><span>' + esc(t('total_students')) + '</span></div>' +
         '<div><b>' + d.teachers + '</b><span>' + esc(t('total_teachers')) + '</span></div>' +
-        '<div><b>' + d.classes + '</b><span>' + esc(t('total_classes')) + '</span></div>' +
-        '<div class="ok"><b>' + d.present_today + '</b><span>' + esc(t('present_today')) + '</span></div>' +
-        '<div class="bad"><b>' + d.absent_today + '</b><span>' + esc(t('absent_today')) + '</span></div>' +
-        '<div class="warn"><b>' + fmtMoney(d.fee_due) + '</b><span>' + esc(t('pending_fees')) + '</span></div>';
-      var notes = must(await db.from('notices').select('id,title,created_at').order('created_at', { ascending: false }).limit(3));
-      info.innerHTML = '<div class="info"><h3>' + esc(t('upcoming_exams')) + ': ' + d.upcoming_exams + '</h3>' +
-        '<h3 style="margin-top:18px">' + esc(t('recent_notices')) + '</h3>' +
-        (notes.length ? notes.map(function (n) { return '<div class="irow"><b>' + esc(n.title) + '</b><span class="muted sm">' + esc(String(n.created_at).slice(0, 10)) + '</span></div>'; }).join('') : emptyMsg()) + '</div>';
+        '<div class="ok"><b>' + d.present_today + '</b><span>' + esc(t('present_today')) + '</span></div>';
+      
     } else if (p.role === 'teacher') {
       var tr = must(await db.from('teachers').select('id, teacher_code, full_name, photo_url').eq('user_id', p.id).maybeSingle());
       var rows = tr ? must(await db.from('teacher_assignments').select('id, classes(name), sections(name), subjects(name)').eq('teacher_id', tr.id)) : [];
