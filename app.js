@@ -15,7 +15,7 @@
   var state = { lang: 'en', profile: null, stack: [], timeoutMin: 15, timer: null, child: null, children: [] };
   var signed = {};
   var installEvt = null;
-  STR.en.more = 'More'; STR.en.exams_manage = 'Exams (create / publish)'; STR.en.student_codes = "Child's Student ID (several children: separate with commas)"; STR.en.subject_mgmt = 'Subjects'; STR.en.user_accounts = 'Logins (ID & password)'; if (STR.ne) STR.ne.more = STR.ne.more || 'थप';
+  STR.en.parent_id = 'Parent mobile number'; if (STR.ne) STR.ne.parent_id = 'अभिभावकको मोबाइल नम्बर'; STR.en.parent_phone = 'Parent mobile number (this is the login ID)'; STR.en.more = 'More'; STR.en.exams_manage = 'Exams (create / publish)'; STR.en.student_codes = "Child's Student ID (several children: separate with commas)"; STR.en.subject_mgmt = 'Subjects'; STR.en.user_accounts = 'Logins (ID & password)'; if (STR.ne) STR.ne.more = STR.ne.more || 'थप';
 
   try { state.lang = localStorage.getItem('amar_lang') || 'en'; } catch (e) {}
 
@@ -763,11 +763,49 @@
     });
   }
 
+  /* One login per parent mobile number (taken from the students' guardian phone). Parent signs in with that number + the password the admin sets. */
+  function parentsFromStudents() {
+    push({ title: function () { return 'Parent logins'; }, render: async function (e) {
+      e.innerHTML = '<div class="empty">Loading…</div>';
+      var studs = [], from = 0, r;
+      do { r = must(await db.from('students').select('student_code,full_name,guardian_name,guardian_phone').eq('status', 'active').range(from, from + 999)); studs = studs.concat(r); from += 1000; } while (r.length === 1000);
+      var have = {}; must(await db.from('users').select('login_id').eq('role', 'parent')).forEach(function (x) { have[x.login_id.toLowerCase()] = 1; });
+      var by = {}, bad = 0, none = 0;
+      studs.forEach(function (s) {
+        var p = String(s.guardian_phone || '').replace(/\D/g, '');
+        if (!p) { none++; return; } if (p.length < 9 || p.length > 10) { bad++; return; }
+        var g = by[p] = by[p] || { phone: p, name: String(s.guardian_name || '').replace(/\s+/g, ' ').trim(), first: s.full_name, codes: [] }; g.codes.push(s.student_code);
+      });
+      var fresh = Object.keys(by).filter(function (p) { return !have[p]; }).map(function (p) { return by[p]; });
+      e.innerHTML = '<div class="note">Each parent signs in with their <b>mobile number</b> and a <b>password you set here</b>. One number = one login, even with several children.</div>' +
+        '<div class="card"><b>' + fresh.length + '</b> new parent logins can be made<br><span class="muted sm">' + (Object.keys(by).length - fresh.length) + ' already exist · ' + none + ' students have no phone number · ' + bad + ' have a wrong number (not 9–10 digits)</span></div>' +
+        (fresh.length ? '<div class="form"><label>Password for all these parents (min 8 characters). Leave empty to make a different one for each parent.</label><input id="ppw"><button class="btn primary" id="pgo">Create ' + fresh.length + ' parent logins</button></div><div id="pout"></div>' : '');
+      var go = $('#pgo', e); if (!go) return;
+      go.onclick = async function () {
+        var pw = $('#ppw', e).value.trim(); if (pw && pw.length < 8) return toast('Password must be at least 8 characters', true);
+        if (!confirm('Create ' + fresh.length + ' parent logins?')) return;
+        go.disabled = true; go.textContent = 'Working…';
+        var rows = fresh.map(function (g) { return { login_id: g.phone, password: pw || ('Amar' + Math.floor(1000 + Math.random() * 9000)), full_name: g.name || ('Parent of ' + g.first), full_name_ne: '', phone: g.phone, address: '', student_codes: g.codes.join(', ') }; });
+        var ok = 0, fails = [], done = [];
+        try {
+          for (var i = 0; i < rows.length; i += 40) {
+            var grp = rows.slice(i, i + 40), res = must(await db.rpc('admin_bulk_create_accounts', { p_role: 'parent', p_rows: grp }));
+            res.forEach(function (x) { if (x.ok) { ok++; done.push(grp[x.row - 1]); } else fails.push(grp[x.row - 1].login_id + ': ' + x.error); });
+          }
+        } catch (ex) { fails.push(errText(ex)); }
+        $('#pout', e).innerHTML = '<div class="note ok">✓ ' + ok + ' parent logins created' + (fails.length ? ' · ' + fails.length + ' failed' : '') + '</div>' + fails.slice(0, 20).map(function (f) { return '<div class="card err">' + esc(f) + '</div>'; }).join('') +
+          '<button class="btn primary" id="pdl">⬇ Download list (mobile number + password)</button>';
+        $('#pdl', e).onclick = function () { downloadCsv('parent-logins.csv', [['Mobile number (login)', 'Parent', 'Password', 'Student IDs']].concat(done.map(function (d) { return [d.login_id, d.full_name, d.password, d.student_codes]; }))); };
+        go.remove();
+      };
+    } });
+  }
+
   function createAccountView(role) {
     var nice = { teacher: 'Teacher', parent: 'Parent', admin: 'Admin' }[role];
     var help = { teacher: 'This teacher signs in with the Login ID and Password below.', parent: 'The parent signs in with the Login ID and Password below. Type the child’s Student ID so the parent can see the child.', admin: 'An Admin can manage everything. Give this only to trusted people.' }[role];
     push({ title: function () { return 'New ' + nice + ' login'; }, render: function (e) {
-      var fields = [{ name: 'full_name', label: 'full_name', required: true }, { name: 'login_id', label: 'login_id', required: true }, { name: 'password', label: 'new_password', required: true }, { name: 'phone', label: 'phone' }];
+      var fields = [{ name: 'full_name', label: 'full_name', required: true }, { name: 'login_id', label: role === 'parent' ? 'parent_phone' : 'login_id', required: true }, { name: 'password', label: 'new_password', required: true }, { name: 'phone', label: 'phone' }];
       if (role === 'parent') fields.push({ name: 'student_codes', label: 'student_codes' });
       e.innerHTML = '<div class="note"><b>' + nice + '</b> – ' + help + ' Password: at least 8 characters.</div><div id="cf"></div>';
       mountForm($('#cf', e), { fields: fields, onSubmit: async function (v) {
@@ -876,7 +914,8 @@
     el.innerHTML = '<div class="seg" id="atabs" style="display:flex">' + ['teacher', 'parent', 'admin'].map(function (r) {
       return '<button style="flex:1" data-r="' + r + '" class="' + (r === tab ? 'on' : '') + '">' + NAMES[r] + ' (' + all.filter(function (x) { return x.role === r; }).length + ')</button>'; }).join('') + '</div>' +
       '<div class="note">Everyone signs in with a <b>Login ID</b> and a <b>Password</b>. Tap the blue button to make a new ' + ONE[tab].toLowerCase() + ' login.</div>' +
-      '<button class="btn primary" id="adma" style="margin-bottom:12px">＋ Add new ' + ONE[tab] + ' login</button>' +
+      (tab === 'parent' ? '<button class="btn primary" id="apf" style="margin-bottom:10px">📱 Make parent logins from students’ phone numbers</button>' : '') +
+      '<button class="btn' + (tab === 'parent' ? '' : ' primary') + '" id="adma" style="margin-bottom:12px">＋ Add one ' + ONE[tab] + ' login</button>' +
       (rows.length ? rows.map(function (r) {
         var me = r.id === state.profile.id;
         return '<div class="card"><div class="row between"><div><h4>' + esc(r.full_name) + '</h4><div class="muted sm">Login ID: <b>' + esc(r.login_id) + '</b></div></div>' +
@@ -886,6 +925,7 @@
       }).join('') : '<div class="empty">No ' + NAMES[tab].toLowerCase() + ' yet.</div>');
     el.querySelectorAll('#atabs button').forEach(function (b) { b.onclick = function () { state.accTab = b.getAttribute('data-r'); viewAccounts(el); }; });
     $('#adma', el).onclick = function () { createAccountView(tab); };
+    if ($('#apf', el)) $('#apf', el).onclick = parentsFromStudents;
     el.querySelectorAll('[data-act]').forEach(function (b) {
       b.onclick = async function () {
         try { must(await db.rpc('admin_set_active', { p_user: b.getAttribute('data-act'), p_active: b.getAttribute('data-to') === '1' })); toast(t('saved')); viewAccounts(el); }
