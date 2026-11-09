@@ -33,8 +33,8 @@
       overall_grade: complete ? G.gradeFor(rule, pct).grade : null, result: !complete ? 'INCOMPLETE' : (ng === 0 ? 'PASS' : 'NG') };
   };
   async function refreshOpt() {
-    var r = must(await db.from('class_subjects').select('class_id,subject_id,is_compulsory')); window.AMAR_OPT = {};
-    r.forEach(function (x) { if (!x.is_compulsory) window.AMAR_OPT[x.class_id + '|' + x.subject_id] = 1; });
+    var r = must(await db.from('class_subjects').select('class_id,subject_id,is_compulsory,opt_slot')); window.AMAR_OPT = {};
+    r.forEach(function (x) { if (!x.is_compulsory) window.AMAR_OPT[x.class_id + '|' + x.subject_id] = x.opt_slot || 1; });
   }
   Object.keys(V).forEach(function (k) { var f = V[k]; if (typeof f === 'function') V[k] = function () { var a = arguments, t = this; return refreshOpt().catch(function () {}).then(function () { return f.apply(t, a); }); }; });
 
@@ -52,7 +52,7 @@
     var mb = {}; marks.forEach(function (m) { (mb[m.student_id] = mb[m.student_id] || {})[m.subject_id] = m; });
     var rules = []; try { rules = must(await db.from('grading_rules').select('*')); } catch (e) {}
     var rule = G.pickRule(rules, cls.level, exam.academic_year);
-    ess.sort(function (a, b) { var oa = window.AMAR_OPT[cid + '|' + a.subject_id] ? 1 : 0, ob = window.AMAR_OPT[cid + '|' + b.subject_id] ? 1 : 0; return oa - ob || (sn[a.subject_id].name < sn[b.subject_id].name ? -1 : 1); });
+    ess.sort(function (a, b) { var oa = window.AMAR_OPT[cid + '|' + a.subject_id] || 0, ob = window.AMAR_OPT[cid + '|' + b.subject_id] || 0; return oa - ob || (sn[a.subject_id].name < sn[b.subject_id].name ? -1 : 1); });
     var items = studs.map(function (s) { return { s: s, res: G.studentResult(rule, ess, mb[s.id] || {}) }; });
     G.rankAll(items);
     return { cls: cls, sch: sch, sn: sn, ess: ess, items: items, rule: rule };
@@ -61,7 +61,7 @@
     var r = it.res, rule = D.rule, k = 0, rows = '';
     r.subjects.forEach(function (sr) {
       if (sr.missing) return; k++;
-      var nm = (D.sn[sr.subject_id].name || '').toUpperCase(), opt = window.AMAR_OPT[D.cls.id + '|' + sr.subject_id] ? 'OPT. ' : (D.cls.level >= 9 && D.cls.level <= 10 ? 'COMP. ' : '');
+      var nm = (D.sn[sr.subject_id].name || '').toUpperCase(), opt = window.AMAR_OPT[D.cls.id + '|' + sr.subject_id] ? 'OPT-' + (window.AMAR_OPT[D.cls.id + '|' + sr.subject_id] === 2 ? 'II' : 'I') + ' ' : (D.cls.level >= 9 && D.cls.level <= 10 ? 'COMP. ' : '');
       if (!mid && sr.parts) {
         var L = [['th', 'TH'], ['pr', 'PR'], ['in', 'IN']].filter(function (c) { return sr.parts[c[0]]; });
         rows += '<tr><td rowspan="' + L.length + '">' + k + '</td><td class="l">' + opt + esc(nm) + ' (' + L[0][1] + ')</td><td>' + f2(sr.parts[L[0][0]].ch) + '</td><td>' + f2(sr.parts[L[0][0]].gp).replace(/0$/, '') + '</td><td>' + sr.parts[L[0][0]].grade + '</td><td rowspan="' + L.length + '">' + sr.grade + '</td></tr>';
