@@ -1,12 +1,12 @@
-// Minimal service worker: lets the app install and open its screens quickly.
-// Network first (so updates show up), cache as a fallback. Database calls
-// go to another domain and are never cached.
-const CACHE = 'amar-school-v7';
+// Service worker: lets the app install and open quickly.
+// Network first (so updates show up), cache as a fallback. Database calls go to another domain and are never cached.
+// IMPORTANT: files are cached one by one, so a missing file can never stop the app from installing.
+const CACHE = 'amar-school-v8';
 const FILES = ['./', './index.html', './styles.css', './app.js', './config.js', './strings.js', './strings2.js', './grading.js', './importer.js', './daily.js', './exams.js', './finance.js', './data.js', './simple.js', './results.js',
-               './manifest.webmanifest', './icon-192.png', './logo.png', './icon-512.png'];
+               './manifest.webmanifest', './icon-192.png', './icon-512.png', './logo.png'];
 
 self.addEventListener('install', e => {
-  e.waitUntil(caches.open(CACHE).then(c => c.addAll(FILES)));
+  e.waitUntil(caches.open(CACHE).then(c => Promise.all(FILES.map(f => c.add(f).catch(() => null)))));
   self.skipWaiting();
 });
 
@@ -21,9 +21,8 @@ self.addEventListener('fetch', e => {
   if (req.method !== 'GET' || new URL(req.url).origin !== self.location.origin) return;
   e.respondWith(
     fetch(req).then(res => {
-      const copy = res.clone();
-      caches.open(CACHE).then(c => c.put(req, copy));
+      if (res && res.ok) { const copy = res.clone(); caches.open(CACHE).then(c => c.put(req, copy)).catch(() => {}); }
       return res;
-    }).catch(() => caches.match(req))
+    }).catch(() => caches.match(req).then(r => r || caches.match('./index.html') || Response.error()))
   );
 });
