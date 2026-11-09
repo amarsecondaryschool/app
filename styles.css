@@ -202,3 +202,26 @@ button:active:not(:disabled) { transform:scale(.97); }
 .tile small{display:none}
 .hstats{grid-template-columns:repeat(3,1fr)!important}
 .tile .badge{display:none}
+
+/* ===== clean look ===== */
+:root { --bg:#f4f7fb; --shadow:0 2px 10px rgba(30,60,100,.08); }
+.grid { grid-template-columns:repeat(3,1fr); gap:12px; }
+.tile { min-height:104px; border-radius:18px; padding:14px 4px; gap:8px; }
+.tile b { font-size:13.5px; font-weight:600; text-align:center; }
+.ico { width:50px; height:50px; border-radius:15px; box-shadow:none; }
+.ico svg, .bottom .i svg, .rolecard .e svg { fill:none; stroke:currentColor; stroke-width:1.8; stroke-linecap:round; stroke-linejoin:round; }
+.ico svg { width:26px; height:26px; } .bottom .i svg { width:24px; height:24px; display:block; margin:0 auto 2px; }
+svg .f { fill:currentColor; stroke:none; }
+.rolecard .e svg { width:46px; height:46px; color:var(--primary); } .rolecard .e { display:block; margin-bottom:6px; }
+.hdr { background:var(--primary); border-radius:20px; padding:16px 12px; box-shadow:var(--shadow); }
+.hdr .hn { font-size:20px; } .hdr .hl { font-size:14px; }
+.appbar h2 { font-size:19px; } .btn { font-size:16px; padding:13px 16px; border-radius:14px; }
+.note { background:#eaf4fd; color:#1b4f7a; border-radius:14px; padding:10px 14px; margin:0 0 12px; font-size:14px; }
+.mini-sel { border:1px solid #d5deea; border-radius:10px; padding:8px; background:#fff; }
+/* marks entry: names on the left, boxes on the right */
+.mk { grid-template-columns:1fr auto !important; }
+.mk .in { display:flex; gap:6px; align-items:center; }
+.mk .in input[type=number] { width:78px; padding:12px 4px; font-size:18px; }
+.mk .in .ab { display:flex; align-items:center; gap:4px; border:0; height:auto; background:none; font-size:13px; color:var(--muted); }
+.mk .in .ab input { width:22px; height:22px; padding:0; }
+.mk .nm h4 { margin:0; font-size:15px; } .mk.bad { outline:2px solid var(--danger); }
