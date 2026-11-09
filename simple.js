@@ -71,24 +71,35 @@
     $('#cs', el).onchange = draw; draw();
   };
 
-  /* ----- Marks entry: make sure an exam and the subject setup exist, then open the normal screen ----- */
+  /* ----- Marks entry: make sure exams and subject setup exist (Nepal credit hours), then open the normal screen ----- */
+  var CORE5 = ['Nepali', 'English', 'Mathematics', 'Science and Technology'];
+  function isMid(e) { return /mid/i.test((e.name || '') + ' ' + (e.exam_type || '')); }
   var origMarks = V.marksEntry;
   V.marksEntry = async function (el) {
     A.skeleton(el);
     try {
       await ensureDefaults();
-      var ex = must(await db.from('exams').select('id').eq('status', 'draft'));
+      var lk = await A.lookups(true), lvl = {}; lk.classes.forEach(function (c) { lvl[c.id] = c.level; });
+      var sname = {}; lk.subjects.forEach(function (x) { sname[x.id] = x.name; });
+      var ex = must(await db.from('exams').select('id,name,exam_type').eq('status', 'draft'));
       if (!ex.length && state.profile.role === 'admin') {
-        must(await db.from('exams').insert({ name: 'First Terminal Exam', exam_type: 'first_terminal', academic_year: '2083' }));
-        ex = must(await db.from('exams').select('id').eq('status', 'draft'));
+        must(await db.from('exams').insert([{ name: 'Mid Terminal Exam', exam_type: 'mid_terminal', academic_year: '2083' }, { name: 'Final Terminal Exam', exam_type: 'final_terminal', academic_year: '2083' }]));
+        ex = must(await db.from('exams').select('id,name,exam_type').eq('status', 'draft'));
       }
-      if (ex.length) {
-        var cs = await loadCS(), ids = ex.map(function (x) { return x.id; }), have = {};
-        must(await db.from('exam_subjects').select('exam_id,class_id,subject_id').in('exam_id', ids)).forEach(function (r) { have[r.exam_id + '|' + r.class_id + '|' + r.subject_id] = 1; });
-        var add = []; ids.forEach(function (e) { cs.forEach(function (r) { if (!have[e + '|' + r.class_id + '|' + r.subject_id]) add.push({ exam_id: e, class_id: r.class_id, subject_id: r.subject_id, theory_marks: 100, practical_marks: 0, internal_marks: 0, pass_marks: 35, credit_hours: 4 }); }); });
+      var cs = await loadCS();
+      for (var k = 0; k < ex.length; k++) {
+        var e = ex[k], mid = isMid(e), ids = Object.keys(lvl).filter(function (c) { return lvl[c] >= 4 && lvl[c] <= 10; });
+        if (ids.length && state.profile.role === 'admin') {   // replace my old plain defaults (100 marks, 4 CH) when no marks exist yet
+          var mc = await db.from('marks').select('id', { count: 'exact', head: true }).eq('exam_id', e.id);
+          if (!mc.error && !mc.count) await db.from('exam_subjects').delete().eq('exam_id', e.id).in('class_id', ids).eq('theory_marks', 100).eq('internal_marks', 0).eq('practical_marks', 0).eq('pass_marks', 35).eq('credit_hours', 4);
+        }
+        var have = {}; must(await db.from('exam_subjects').select('class_id,subject_id').eq('exam_id', e.id)).forEach(function (r) { have[r.class_id + '|' + r.subject_id] = 1; });
+        var add = []; cs.forEach(function (r) { if (have[r.class_id + '|' + r.subject_id]) return;
+          var l = lvl[r.class_id], band = l >= 4 && l <= 10, n = sname[r.subject_id], cr = band ? (CORE5.indexOf(n) >= 0 ? 5 : 4) : 4, comp = band && !mid;
+          add.push({ exam_id: e.id, class_id: r.class_id, subject_id: r.subject_id, theory_marks: comp ? 75 : 100, practical_marks: 0, internal_marks: comp ? 25 : 0, pass_marks: 0, credit_hours: mid ? cr / 2 : cr }); });
         for (var i = 0; i < add.length; i += 200) must(await db.from('exam_subjects').insert(add.slice(i, i + 200)));
       }
-    } catch (e) { toast(A.errText(e), true); }
+    } catch (e2) { toast(A.errText(e2), true); }
     return origMarks(el);
   };
 })();
