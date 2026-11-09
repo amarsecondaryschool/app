@@ -135,6 +135,7 @@
     (await A.lookups()).classes.forEach(function (c) { have[c.name.toLowerCase()] = 1; });
     var add = Object.keys(names).filter(function (n) { return !have[n.toLowerCase()]; }).map(function (n) { var m = n.match(/\d+/); return { school_id: sch.id, name: n, level: m ? +m[0] : 0 }; });
     if (add.length) must(await db.from('classes').upsert(add, { onConflict: 'school_id,name' }));
+    await A.lookups(true);   // refresh the cached class list so the new classes are found
   }
 
   async function importTab(box) {
@@ -163,6 +164,13 @@
             var res = await commit(entity, good.map(function (g) { return g.rec; }), function (d, n) { $('#ipf', out).style.width = Math.round(d / n * 100) + '%'; });
             A.dropSchool && 0; $('#iout', out).innerHTML = '<div class="note ok">✓ ' + esc(t('dh_done')) + ': ' + res.ok + (res.fails.length ? ' · ' + esc(t('dh_failed')) + ': ' + res.fails.length : '') + '</div>' +
               res.fails.slice(0, 50).map(function (x) { return '<div class="card"><b>' + esc(x.id) + '</b> <span class="err">' + esc(x.error) + '</span></div>'; }).join('');
+            if (entity === 'teachers' || entity === 'parents') {
+              var bad2 = {}; res.fails.forEach(function (x) { bad2[x.id] = 1; });
+              var logins = good.map(function (g) { return g.rec; }).filter(function (r) { return !bad2[r.login_id]; }).map(function (r) { return [r.login_id, r.full_name, r.password]; });
+              var lb = document.createElement('button'); lb.className = 'btn primary mt'; lb.textContent = '⬇ Download login list (ID + password)';
+              lb.onclick = function () { saveTable(entity + '-logins', [['Login ID', 'Name', 'Password']].concat(logins)); };
+              $('#iout', out).appendChild(lb);
+            }
           } catch (e) { $('#iout', out).innerHTML = '<p class="err">' + esc(A.errText(e)) + '</p>'; cb.disabled = false; }
         };
       } catch (e) { out.innerHTML = '<p class="err">' + esc(A.errText(e)) + '</p>'; }
