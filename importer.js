@@ -149,18 +149,24 @@
     },
     teachers: {
       columns: [
-        { key: 'login_id', aliases: ['teacherid', 'id', 'teachercode'], req: 1, ex: 'TCH001' },
-        { key: 'password', req: 1, ex: 'ChangeMe123' },
+        { key: 'login_id', aliases: ['teacherid', 'id', 'teachercode'], ex: 'TCH001' },
+        { key: 'password', ex: 'ChangeMe123' },
         { key: 'full_name', aliases: ['name', 'teachername'], req: 1, ex: 'Hari Prasad' },
         { key: 'full_name_ne', aliases: ['nameneplai', 'nepaliname'], ex: 'हरि प्रसाद' },
-        { key: 'phone', aliases: ['contact', 'mobile'], ex: '9800000001' },
+        { key: 'phone', aliases: ['contact', 'mobile', 'contactnumber'], ex: '9800000001' },
         { key: 'address', ex: 'Lalitpur' }
       ],
       check: function (r, ctx) {
-        var id = need(r, 'login_id', 'Teacher ID'); dup(ctx, 'tch', lc(id));
+        var id = txt(r.login_id);
+        if (!id) {                                  // auto-generate TCH001, TCH002 ... skipping used ones
+          ctx.tseq = ctx.tseq || 0;
+          do { ctx.tseq++; id = 'TCH' + String(ctx.tseq).padStart(3, '0'); } while ((ctx.teacherCodes && ctx.teacherCodes[lc(id)]) || (ctx.seen && ctx.seen['tch|' + lc(id)]));
+        }
+        dup(ctx, 'tch', lc(id));
         if (!/^[A-Za-z0-9._-]{3,30}$/.test(id)) throw new Error('ID must be 3-30 letters/numbers (. - _ allowed)');
-        var pw = txt(r.password); if (pw.length < 8) throw new Error('password must be at least 8 characters');
-        return { login_id: id, password: pw, full_name: need(r, 'full_name', 'Name'), full_name_ne: txt(r.full_name_ne),
+        var pw = txt(r.password) || ('Amar' + String(Math.floor(1000 + Math.random() * 9000)));
+        if (pw.length < 8) throw new Error('password must be at least 8 characters');
+        return { login_id: id, password: pw, full_name: need(r, 'full_name', 'Name').replace(/\s+/g, ' '), full_name_ne: txt(r.full_name_ne),
                  phone: txt(r.phone), address: txt(r.address), student_codes: '' };
       }
     },
