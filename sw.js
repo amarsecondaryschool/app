@@ -1,9 +1,9 @@
 // Minimal service worker: lets the app install and open its screens quickly.
 // Network first (so updates show up), cache as a fallback. Database calls
 // go to another domain and are never cached.
-const CACHE = 'amar-school-v6';
+const CACHE = 'amar-school-v7';
 const FILES = ['./', './index.html', './styles.css', './app.js', './config.js', './strings.js', './strings2.js', './grading.js', './importer.js', './daily.js', './exams.js', './finance.js', './data.js', './simple.js', './results.js',
-               './manifest.webmanifest', './icon-192.png', './icon-512.png'];
+               './manifest.webmanifest', './icon-192.png', './logo.png', './icon-512.png'];
 
 self.addEventListener('install', e => {
   e.waitUntil(caches.open(CACHE).then(c => c.addAll(FILES)));
