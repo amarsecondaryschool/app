@@ -197,3 +197,8 @@ button:active:not(:disabled) { transform:scale(.97); }
   @page { size:A4; margin:12mm; }
   .rc, .idc { box-shadow:none; -webkit-print-color-adjust:exact; print-color-adjust:exact; }
 }
+
+/* simple home */
+.tile small{display:none}
+.hstats{grid-template-columns:repeat(3,1fr)!important}
+.tile .badge{display:none}
