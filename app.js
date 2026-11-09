@@ -15,7 +15,7 @@
   var state = { lang: 'en', profile: null, stack: [], timeoutMin: 15, timer: null, child: null, children: [] };
   var signed = {};
   var installEvt = null;
-  STR.en.more = STR.en.more || 'More'; if (STR.ne) STR.ne.more = STR.ne.more || 'थप';
+  STR.en.more = 'More'; STR.en.exams_manage = 'Exams (create / publish)'; STR.en.student_codes = "Child's Student ID (several children: separate with commas)"; STR.en.subject_mgmt = 'Subjects'; STR.en.user_accounts = 'Logins (ID & password)'; if (STR.ne) STR.ne.more = STR.ne.more || 'थप';
 
   try { state.lang = localStorage.getItem('amar_lang') || 'en'; } catch (e) {}
 
@@ -40,10 +40,8 @@
 
   function logo(size) {
     return '<svg width="' + size + '" height="' + size + '" viewBox="0 0 100 100" aria-hidden="true">' +
-      '<circle cx="50" cy="50" r="48" fill="#1f78b4"/>' +
-      '<path d="M50 22 L84 38 L50 54 L16 38 Z" fill="#fff"/>' +
-      '<path d="M30 48 V62 C30 70 70 70 70 62 V48 L50 58 Z" fill="#dff1ff"/>' +
-      '<rect x="80" y="40" width="3" height="20" fill="#fff"/><circle cx="81.5" cy="62" r="3.5" fill="#fff"/></svg>';
+      '<rect width="100" height="100" rx="22" fill="#1f78b4"/><path d="M50 22 L86 40 L50 58 L14 40 Z" fill="#fff"/>' +
+      '<path d="M28 51 V68 L50 77 L72 68 V51 L50 61 Z" fill="#d6ecff"/><path d="M83 42 V63" stroke="#f5b028" stroke-width="2.2"/><circle cx="83" cy="65" r="2.8" fill="#f5b028"/></svg>';
   }
 
   function langToggle() {
@@ -201,7 +199,7 @@
     var h = '<div class="page"><div class="sel-top"><h2>Amar Secondary School</h2>' + langToggle() + '</div>' +
       '<div class="logocard">' + logo(150) + '<div class="school">' + SCHOOL + '</div></div><div class="rolegrid">';
     cards.forEach(function (c) {
-      h += '<button class="rolecard" data-role="' + c[0] + '"><span class="e">' + c[1] + '</span>' + esc(t(c[2])) + '</button>';
+      h += '<button class="rolecard" data-role="' + c[0] + '"><span class="e">' + iconSvg(c[0], c[1]) + '</span>' + esc(t(c[2])) + '</button>';
     });
     h += '</div>';
     if (!configured) h += '<div class="note">' + esc(t('err_not_configured')) + '</div>';
@@ -237,7 +235,7 @@
 
   /* ---------- shell: app bar, content, bottom bar ---------- */
   function showShell() {
-    state.stack = [];
+    state.stack = []; hpush();
     root.innerHTML = '<div class="shell"><div id="appbar"></div><div id="content"></div><nav class="bottom" id="nav"></nav></div>';
     renderChrome(); renderContent();
   }
@@ -255,7 +253,7 @@
     var nav = $('#nav');
     nav.innerHTML = NAV.map(function (n) {
       if (n[0] === 'home') return '<button class="mid" data-n="home" aria-label="' + esc(t('home')) + '"><span>' + logo(56) + '</span></button>';
-      return '<button data-n="' + n[0] + '"><span class="i">' + n[1] + '</span>' + esc(t(n[0])) + '</button>';
+      return '<button data-n="' + n[0] + '"><span class="i">' + iconSvg(n[0], n[1]) + '</span>' + esc(t(n[0])) + '</button>';
     }).join('');
     nav.querySelectorAll('button').forEach(function (b) {
       b.addEventListener('click', function () {
@@ -263,7 +261,7 @@
         closeMenu();
         if (key === 'home') { state.stack = []; }
         else {
-          state.stack = [{ title: function () { return t(key); }, render: V(key) }];
+          state.stack = [{ title: function () { return t(key); }, render: V(key) }]; hpush();
         }
         renderChrome(); renderContent();
       });
@@ -288,8 +286,15 @@
     document.removeEventListener('click', outsideMenu);
   }
 
-  function push(view) { state.stack.push(view); renderChrome(); renderContent(); }
-  function pop() { state.stack.pop(); lk = null; renderChrome(); renderContent(); }
+  function hpush() { try { history.pushState({ a: 1 }, ''); } catch (e) {} }
+  function push(view) { state.stack.push(view); hpush(); renderChrome(); renderContent(); }
+  function pop() { if (!state.stack.length) return; try { history.back(); } catch (e) { state.stack.pop(); renderChrome(); renderContent(); } }
+  window.addEventListener('popstate', function () {
+    if (!state.profile) return;
+    if (state.stack.length) { state.stack.pop(); lk = null; closeMenu(); renderChrome(); renderContent(); return; }
+    if (Date.now() - (state.exitT || 0) < 2000) return;       // second back press within 2 s: leave the app
+    state.exitT = Date.now(); toast('Press back again to exit'); hpush();
+  });
 
   function renderContent() {
     var c = $('#content');
@@ -382,11 +387,12 @@
     { k: 'student_records', i: '🎒', g: 'p', view: viewStudents },
     { k: 'teacher_records', i: '🧑‍🏫', g: 'p', view: viewTeachers },
     { k: 'parent_info', more: 1, i: '👨‍👩‍👧', g: 'p', view: viewParents },
-    { k: 'user_accounts', more: 1, i: '🔑', g: 'p', view: viewAccounts },
+    { k: 'user_accounts', i: '🔑', g: 'p', view: viewAccounts },
     { k: 'class_mgmt', i: '🏫', g: 'a', view: viewClasses },
-    { k: 'subject_mgmt', more: 1, i: '📚', g: 'a', view: viewSubjects },
+    { k: 'subject_mgmt', i: '📚', g: 'a', name: 'classSubjects' },
     { k: 'attendance', i: '✅', g: 'a', name: 'attendance' },
-    { k: 'marks_entry', i: '📝', g: 'a', name: 'exams' },
+    { k: 'marks_entry', i: '📝', g: 'a', name: 'marksEntry' },
+    { k: 'exams_manage', more: 1, i: '📝', g: 'a', name: 'exams' },
     { k: 'grade_sheet', more: 1, i: '🏅', g: 'a', name: 'gradeSheets' },
     { k: 'auto_reports', more: 1, i: '📄', g: 'a', name: 'reports' },
     { k: 'homework', more: 1, i: '📓', g: 'a', name: 'homework' },
@@ -395,8 +401,6 @@
     { k: 'fees', i: '💰', g: 'o', name: 'fees' },
     { k: 'notices', i: '📢', g: 'o', name: 'notices' },
     { k: 'calendar', more: 1, i: '📅', g: 'o', name: 'calendar' },
-    { k: 'library', more: 1, i: '📖', g: 'o', name: 'library' },
-    { k: 'transport', more: 1, i: '🚌', g: 'o', name: 'transport' },
     { k: 'staff_leave', more: 1, i: '🏖️', g: 'o', name: 'leave' },
     { k: 'import_export', i: '📥', g: 'd', name: 'dataHub' },
     { k: 'settings', more: 1, i: '⚙️', g: 'd', name: 'settings' }
@@ -419,20 +423,40 @@
     { k: 'examination', i: '📄', name: 'results' },
     { k: 'exam_routine', more: 1, i: '🗓️', name: 'examRoutine' },
     { k: 'account', i: '💰', name: 'fees' },
-    { k: 'library', more: 1, i: '📖', name: 'library' },
     { k: 'calendar', more: 1, i: '📅', name: 'calendar' },
     { k: 'timetable', more: 1, i: '⏰', name: 'timetable' },
-    { k: 'transport', more: 1, i: '🚌', name: 'transport' },
     { k: 'inbox', i: '🔔', name: 'inbox' }
   ];
   var GROUPS = { p: ['grp_people', 'g-blue'], a: ['grp_academics', 'g-green'], o: ['grp_operations', 'g-orange'], d: ['grp_data', 'g-purple'], x: ['', 'g-blue'] };
   var PALETTE = ['g-blue', 'g-green', 'g-purple', 'g-orange'];
   function ready(f) { return !!(f.view || (f.name && AMAR.views[f.name])); }
+
+  var ICP = {
+    users: '<circle cx="9" cy="8" r="3.5"/><path d="M2.5 20c0-3.6 2.9-6 6.5-6s6.5 2.4 6.5 6"/><path d="M16 4.5a3.5 3.5 0 0 1 0 7M18 14.5c2 .7 3.5 2.5 3.5 5.5"/>',
+    cap: '<path d="M2 9l10-5 10 5-10 5z"/><path d="M6 11.5V16c0 1.5 3 3 6 3s6-1.5 6-3v-4.5"/>',
+    school: '<path d="M3 21h18M5 21V9l7-5 7 5v12"/><path d="M10 21v-6h4v6"/>',
+    check: '<rect x="3.5" y="3.5" width="17" height="17" rx="3"/><path d="M8 12.5l3 3 5-6"/>',
+    pencil: '<path d="M4 20l1-4L16.5 4.5a2 2 0 0 1 3 3L8 19z"/>',
+    wallet: '<rect x="3" y="6" width="18" height="14" rx="3"/><path d="M3 10h18M16 15h2"/>',
+    bell: '<path d="M6 16v-5a6 6 0 0 1 12 0v5l1.5 2h-15z"/><path d="M10 21h4"/>',
+    upload: '<path d="M12 16V4M7 9l5-5 5 5"/><path d="M4 16v4h16v-4"/>',
+    dots: '<circle class="f" cx="5" cy="12" r="1.8"/><circle class="f" cx="12" cy="12" r="1.8"/><circle class="f" cx="19" cy="12" r="1.8"/>',
+    gear: '<circle cx="12" cy="12" r="3"/><path d="M12 3v3M12 18v3M3 12h3M18 12h3M5.6 5.6l2.1 2.1M16.3 16.3l2.1 2.1M18.4 5.6l-2.1 2.1M7.7 16.3l-2.1 2.1"/>',
+    book: '<path d="M4 5a2 2 0 0 1 2-2h13v16H6a2 2 0 0 0-2 2z"/><path d="M4 21V5"/>',
+    award: '<circle cx="12" cy="9" r="5"/><path d="M8.5 13.5L7 21l5-3 5 3-1.5-7.5"/>',
+    key: '<circle cx="8" cy="15" r="4"/><path d="M11 12l9-9M16 7l3 3"/>',
+    calendar: '<rect x="3.5" y="5" width="17" height="15" rx="2.5"/><path d="M3.5 10h17M8 3v4M16 3v4"/>',
+    clock: '<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>',
+    file: '<path d="M6 3h8l4 4v14H6z"/><path d="M14 3v4h4M9 12h6M9 16h6"/>',
+    mail: '<rect x="3" y="5" width="18" height="14" rx="2.5"/><path d="M3.5 7l8.5 6 8.5-6"/>'
+  };
+  var ICK = { student_records: 'users', parent_info: 'users', teacher_records: 'cap', teachers: 'cap', user_accounts: 'key', class_mgmt: 'school', my_classes: 'school', subject_mgmt: 'book', attendance: 'check', marks_entry: 'pencil', exams_manage: 'file', grade_sheet: 'award', auto_reports: 'file', examination: 'file', exam_routine: 'file', homework: 'book', class_routine: 'clock', timetable: 'clock', fees: 'wallet', account: 'wallet', notices: 'bell', inbox: 'mail', calendar: 'calendar', staff_leave: 'calendar', import_export: 'upload', settings: 'gear', more: 'dots', admin: 'school', teacher: 'cap', parent: 'users' };
+  function iconSvg(k, fb) { var p = ICP[ICK[k]]; return p ? '<svg viewBox="0 0 24 24" aria-hidden="true">' + p + '</svg>' : fb; }
   function tileHtml(f, i) {
     var cls = f.g ? GROUPS[f.g][1] : PALETTE[i % 4];
     return '<button class="tile" data-i="' + i + '" data-s="' + esc((t(f.k) + ' ' + sub(f.k)).toLowerCase()) + '">' +
       (ready(f) ? '' : '<span class="badge">' + esc(t('soon')) + '</span>') +
-      '<span class="ico ' + cls + '">' + f.i + '</span><b>' + esc(t(f.k)) + '</b><small>' + esc(sub(f.k)) + '</small></button>';
+      '<span class="ico ' + cls + '">' + iconSvg(f.k, f.i) + '</span><b>' + esc(t(f.k)) + '</b><small>' + esc(sub(f.k)) + '</small></button>';
   }
   function tiles(list, grouped) {
     if (!grouped) return '<div class="grid">' + list.map(tileHtml).join('') + '</div>';
@@ -733,21 +757,26 @@
           esc(r.full_name) + (r.full_name_ne ? ' · ' + esc(r.full_name_ne) : '') + '</h4><div class="muted">' + esc(r.teacher_code) + (r.phone ? ' · ' + esc(r.phone) : '') + '</div></div></div>';
       }).join('') : emptyMsg());
     hydratePhotos(el);
-    $('#addt', el).onclick = function () { createAccountView('teacher', 'add_teacher'); };
+    $('#addt', el).onclick = function () { createAccountView('teacher'); };
     el.querySelectorAll('.card.tap').forEach(function (c) {
       c.onclick = function () { teacherDetail(rows.filter(function (r) { return r.id === c.getAttribute('data-id'); })[0]); };
     });
   }
 
-  function createAccountView(role, titleKey) {
-    push({ title: function () { return t(titleKey); }, render: function (e) {
-      var fields = [
-        { name: 'login_id', label: 'login_id', required: true }, { name: 'password', label: 'new_password', required: true },
-        { name: 'full_name', label: 'full_name', required: true }, { name: 'full_name_ne', label: 'full_name_ne' }, { name: 'phone', label: 'phone' }];
-      if (role === 'teacher') fields.push({ name: 'address', label: 'address' });
-      mountForm(e, { fields: fields, onSubmit: async function (v) {
-        must(await db.rpc('admin_create_account', { p_role: role, p_login_id: v.login_id, p_password: v.password, p_full_name: v.full_name,
-          p_full_name_ne: v.full_name_ne, p_phone: v.phone, p_address: v.address || null }));
+  function createAccountView(role) {
+    var nice = { teacher: 'Teacher', parent: 'Parent', admin: 'Admin' }[role];
+    var help = { teacher: 'This teacher signs in with the Login ID and Password below.', parent: 'The parent signs in with the Login ID and Password below. Type the child’s Student ID so the parent can see the child.', admin: 'An Admin can manage everything. Give this only to trusted people.' }[role];
+    push({ title: function () { return 'New ' + nice + ' login'; }, render: function (e) {
+      var fields = [{ name: 'full_name', label: 'full_name', required: true }, { name: 'login_id', label: 'login_id', required: true }, { name: 'password', label: 'new_password', required: true }, { name: 'phone', label: 'phone' }];
+      if (role === 'parent') fields.push({ name: 'student_codes', label: 'student_codes' });
+      e.innerHTML = '<div class="note"><b>' + nice + '</b> – ' + help + ' Password: at least 8 characters.</div><div id="cf"></div>';
+      mountForm($('#cf', e), { fields: fields, onSubmit: async function (v) {
+        if (role === 'parent') {
+          var r = must(await db.rpc('admin_bulk_create_accounts', { p_role: 'parent', p_rows: [{ login_id: v.login_id, password: v.password, full_name: v.full_name, full_name_ne: '', phone: v.phone || '', address: '', student_codes: v.student_codes || '' }] }));
+          if (r && r[0] && !r[0].ok) throw new Error(r[0].error);
+        } else {
+          must(await db.rpc('admin_create_account', { p_role: role, p_login_id: v.login_id, p_password: v.password, p_full_name: v.full_name, p_full_name_ne: null, p_phone: v.phone || null, p_address: null }));
+        }
         toast(t('account_created')); pop();
       } });
     } });
@@ -803,7 +832,7 @@
       (rows.length ? rows.map(function (r) {
         return '<div class="card tap" data-id="' + r.id + '"><h4>' + esc(r.full_name) + '</h4><div class="muted">' + esc(r.parent_code) + (r.phone ? ' · ' + esc(r.phone) : '') + '</div></div>';
       }).join('') : emptyMsg());
-    $('#addp', el).onclick = function () { createAccountView('parent', 'add_parent'); };
+    $('#addp', el).onclick = function () { createAccountView('parent'); };
     el.querySelectorAll('.card.tap').forEach(function (c) {
       c.onclick = function () { parentDetail(rows.filter(function (r) { return r.id === c.getAttribute('data-id'); })[0]); };
     });
@@ -841,16 +870,22 @@
 
   /* ---------- admin: user accounts ---------- */
   async function viewAccounts(el) {
-    var rows = must(await db.from('users').select('id, role, login_id, full_name, is_active').order('role').order('full_name'));
-    el.innerHTML = '<button class="btn primary" id="adma" style="margin-bottom:12px">＋ ' + esc(t('add')) + ' – ' + esc(t('admin_login')) + '</button>' +
-      rows.map(function (r) {
+    var tab = state.accTab || 'teacher', NAMES = { teacher: 'Teachers', parent: 'Parents', admin: 'Admins' }, ONE = { teacher: 'Teacher', parent: 'Parent', admin: 'Admin' };
+    var all = must(await db.from('users').select('id, role, login_id, full_name, is_active').order('full_name'));
+    var rows = all.filter(function (r) { return r.role === tab; });
+    el.innerHTML = '<div class="seg" id="atabs" style="display:flex">' + ['teacher', 'parent', 'admin'].map(function (r) {
+      return '<button style="flex:1" data-r="' + r + '" class="' + (r === tab ? 'on' : '') + '">' + NAMES[r] + ' (' + all.filter(function (x) { return x.role === r; }).length + ')</button>'; }).join('') + '</div>' +
+      '<div class="note">Everyone signs in with a <b>Login ID</b> and a <b>Password</b>. Tap the blue button to make a new ' + ONE[tab].toLowerCase() + ' login.</div>' +
+      '<button class="btn primary" id="adma" style="margin-bottom:12px">＋ Add new ' + ONE[tab] + ' login</button>' +
+      (rows.length ? rows.map(function (r) {
         var me = r.id === state.profile.id;
-        return '<div class="card"><div class="row between"><div><h4>' + esc(r.full_name) + '</h4><div class="muted">' + esc(roleLabel(r.role)) + ' · ' + esc(r.login_id) + '</div></div>' +
+        return '<div class="card"><div class="row between"><div><h4>' + esc(r.full_name) + '</h4><div class="muted sm">Login ID: <b>' + esc(r.login_id) + '</b></div></div>' +
           '<span class="chip ' + (r.is_active ? 'ok' : 'bad') + '">' + esc(t(r.is_active ? 'active' : 'inactive')) + '</span></div>' +
-          '<div class="row" style="margin-top:10px"><button class="btn small" data-rp="' + r.id + '">' + esc(t('reset_password')) + '</button>' +
+          '<div class="row" style="margin-top:10px"><button class="btn small" data-rp="' + r.id + '">New password</button>' +
           (me ? '' : '<button class="btn small ' + (r.is_active ? 'danger' : '') + '" data-act="' + r.id + '" data-to="' + (r.is_active ? 0 : 1) + '">' + esc(t(r.is_active ? 'deactivate' : 'activate')) + '</button>') + '</div></div>';
-      }).join('');
-    $('#adma', el).onclick = function () { createAccountView('admin', 'admin_login'); };
+      }).join('') : '<div class="empty">No ' + NAMES[tab].toLowerCase() + ' yet.</div>');
+    el.querySelectorAll('#atabs button').forEach(function (b) { b.onclick = function () { state.accTab = b.getAttribute('data-r'); viewAccounts(el); }; });
+    $('#adma', el).onclick = function () { createAccountView(tab); };
     el.querySelectorAll('[data-act]').forEach(function (b) {
       b.onclick = async function () {
         try { must(await db.rpc('admin_set_active', { p_user: b.getAttribute('data-act'), p_active: b.getAttribute('data-to') === '1' })); toast(t('saved')); viewAccounts(el); }
@@ -860,7 +895,7 @@
     el.querySelectorAll('[data-rp]').forEach(function (b) {
       b.onclick = function () {
         var uid = b.getAttribute('data-rp');
-        push({ title: function () { return t('reset_password'); }, render: function (e) {
+        push({ title: function () { return 'New password'; }, render: function (e) {
           mountForm(e, { fields: [{ name: 'password', label: 'new_password', required: true }], onSubmit: async function (v) {
             must(await db.rpc('admin_reset_password', { p_user: uid, p_password: v.password }));
             toast(t('password_reset_done')); pop();
