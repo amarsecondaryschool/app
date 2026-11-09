@@ -38,11 +38,7 @@
   function roleLabel(r) { return t(r + '_login'); }
   function roleTitle(r) { return t(r === 'admin' ? 'card_school' : r === 'teacher' ? 'card_teacher' : 'card_student'); }
 
-  function logo(size) {
-    return '<svg width="' + size + '" height="' + size + '" viewBox="0 0 100 100" aria-hidden="true">' +
-      '<rect width="100" height="100" rx="22" fill="#1f78b4"/><path d="M50 22 L86 40 L50 58 L14 40 Z" fill="#fff"/>' +
-      '<path d="M28 51 V68 L50 77 L72 68 V51 L50 61 Z" fill="#d6ecff"/><path d="M83 42 V63" stroke="#f5b028" stroke-width="2.2"/><circle cx="83" cy="65" r="2.8" fill="#f5b028"/></svg>';
-  }
+  function logo(size) { return '<img src="logo.png" width="' + size + '" height="' + size + '" alt="Amar Secondary School" style="border-radius:50%;background:#fff;box-shadow:0 2px 8px rgba(0,0,0,.25);object-fit:cover">'; }
 
   function langToggle() {
     return '<div class="seg" data-lang-toggle>' +
