@@ -15,7 +15,7 @@
   var state = { lang: 'en', profile: null, stack: [], timeoutMin: 15, timer: null, child: null, children: [] };
   var signed = {};
   var installEvt = null;
-  STR.en.parent_id = 'Parent mobile number'; if (STR.ne) STR.ne.parent_id = 'अभिभावकको मोबाइल नम्बर'; STR.en.parent_phone = 'Parent mobile number (this is the login ID)'; STR.en.more = 'More'; STR.en.exams_manage = 'Exams (create / publish)'; STR.en.student_codes = "Child's Student ID (several children: separate with commas)"; STR.en.subject_mgmt = 'Subjects'; STR.en.user_accounts = 'Logins (ID & password)'; if (STR.ne) STR.ne.more = STR.ne.more || 'थप';
+  STR.en.parent_id = 'Parent mobile number'; if (STR.ne) STR.ne.parent_id = 'अभिभावकको मोबाइल नम्बर'; STR.en.parent_phone = 'Parent mobile number (this is the login ID)'; STR.en.more = 'More'; STR.en.grade_sheet = 'Results & Ledger'; STR.en.exams_manage = 'Exams (create / publish)'; STR.en.student_codes = "Child's Student ID (several children: separate with commas)"; STR.en.subject_mgmt = 'Subjects'; STR.en.user_accounts = 'Logins (ID & password)'; if (STR.ne) STR.ne.more = STR.ne.more || 'थप';
 
   try { state.lang = localStorage.getItem('amar_lang') || 'en'; } catch (e) {}
 
@@ -393,7 +393,7 @@
     { k: 'attendance', i: '✅', g: 'a', name: 'attendance' },
     { k: 'marks_entry', i: '📝', g: 'a', name: 'marksEntry' },
     { k: 'exams_manage', more: 1, i: '📝', g: 'a', name: 'exams' },
-    { k: 'grade_sheet', more: 1, i: '🏅', g: 'a', name: 'gradeSheets' },
+    { k: 'grade_sheet', more: 1, i: '🏅', g: 'a', name: 'resultsLedger' },
     { k: 'auto_reports', more: 1, i: '📄', g: 'a', name: 'reports' },
     { k: 'homework', more: 1, i: '📓', g: 'a', name: 'homework' },
     { k: 'exam_routine', more: 1, i: '🗓️', g: 'a', name: 'examRoutine' },
