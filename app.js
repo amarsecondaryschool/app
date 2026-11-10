@@ -15,7 +15,7 @@
   var state = { lang: 'en', profile: null, stack: [], timeoutMin: 15, timer: null, child: null, children: [] };
   var signed = {};
   var installEvt = null;
-  STR.en.parent_id = 'Parent mobile number'; if (STR.ne) STR.ne.parent_id = 'अभिभावकको मोबाइल नम्बर'; STR.en.parent_phone = 'Parent mobile number (this is the login ID)'; STR.en.more = 'More'; STR.en.grade_sheet = 'Results & Ledger'; STR.en.exams_manage = 'Exams (create / publish)'; STR.en.student_codes = "Child's Student ID (several children: separate with commas)"; STR.en.subject_mgmt = 'Subjects'; STR.en.user_accounts = 'Logins (ID & password)'; if (STR.ne) STR.ne.more = STR.ne.more || 'थप';
+  STR.en.parent_id = 'Parent mobile number'; if (STR.ne) STR.ne.parent_id = 'अभिभावकको मोबाइल नम्बर'; STR.en.parent_phone = 'Parent mobile number (this is the login ID)'; STR.en.more = 'More'; STR.en.marksEntry = 'Marks'; STR.en.results = 'Results'; STR.en.home = STR.en.home || 'Home'; STR.en.grade_sheet = 'Results & Ledger'; STR.en.exams_manage = 'Exams (create / publish)'; STR.en.student_codes = "Child's Student ID (several children: separate with commas)"; STR.en.subject_mgmt = 'Subjects'; STR.en.user_accounts = 'Logins (ID & password)'; if (STR.ne) STR.ne.more = STR.ne.more || 'थप';
 
   try { state.lang = localStorage.getItem('amar_lang') || 'en'; } catch (e) {}
 
@@ -168,7 +168,7 @@
   }
   function showDownload() {
     root.innerHTML = '<div class="dl"><div>' + logo(130) + '</div><h1>' + SCHOOL + '</h1>' +
-      '<button class="btn primary big" id="dlbtn">⬇ Download App · एप डाउनलोड</button><p class="muted" id="dlmsg"></p></div>';
+      '<button class="btn primary big" id="dlbtn">Download App · एप डाउनलोड</button><p class="muted" id="dlmsg"></p></div>';
     $('#dlbtn').addEventListener('click', function () {
       var msg = $('#dlmsg');
       if (installEvt) {
@@ -191,7 +191,7 @@
   }
 
   function showSelect() {
-    var cards = [['teacher', '🧑‍🏫', 'card_teacher'], ['parent', '🧒', 'card_student'], ['admin', '🏫', 'card_school']];
+    var cards = [['teacher', '', 'card_teacher'], ['parent', '', 'card_student'], ['admin', '', 'card_school']];
     var h = '<div class="page"><div class="sel-top"><h2>Amar Secondary School</h2>' + langToggle() + '</div>' +
       '<div class="logocard">' + logo(150) + '<div class="school">' + SCHOOL + '</div></div><div class="rolegrid">';
     cards.forEach(function (c) {
@@ -236,7 +236,7 @@
     renderChrome(); renderContent();
   }
 
-  var NAV = [['homework', '📓'], ['attendance', '✅'], ['home'], ['notices', '📢'], ['inbox', '💬']];
+  function navFor(r) { return r === 'parent' ? [['home'], ['attendance'], ['homework'], ['results'], ['inbox']] : [['home'], ['attendance'], ['marksEntry'], ['homework'], ['notices']]; }
 
   function renderChrome() {
     var v = state.stack[state.stack.length - 1];
@@ -247,9 +247,9 @@
     $('#more').onclick = function (e) { e.stopPropagation(); if ($('#menu')) closeMenu(); else openMenu(); };
 
     var nav = $('#nav');
-    nav.innerHTML = NAV.map(function (n) {
-      if (n[0] === 'home') return '<button class="mid" data-n="home" aria-label="' + esc(t('home')) + '"><span>' + logo(56) + '</span></button>';
-      return '<button data-n="' + n[0] + '"><span class="i">' + iconSvg(n[0], n[1]) + '</span>' + esc(t(n[0])) + '</button>';
+    var act = state.stack.length ? state.stack[0].navKey : 'home';
+    nav.innerHTML = navFor(state.profile.role).map(function (n) {
+      return '<button data-n="' + n[0] + '" class="' + (n[0] === act ? 'on' : '') + '"><span class="i">' + iconSvg(n[0], '') + '</span><em>' + esc(t(n[0])) + '</em></button>';
     }).join('');
     nav.querySelectorAll('button').forEach(function (b) {
       b.addEventListener('click', function () {
@@ -257,7 +257,7 @@
         closeMenu();
         if (key === 'home') { state.stack = []; }
         else {
-          state.stack = [{ title: function () { return t(key); }, render: V(key) }]; hpush();
+          state.stack = [{ navKey: key, title: function () { return t(key); }, render: V(key) }]; hpush();
         }
         renderChrome(); renderContent();
       });
@@ -268,8 +268,8 @@
     var m = document.createElement('div'); m.className = 'menu'; m.id = 'menu';
     m.innerHTML = '<div class="mi"><div class="muted sm" style="margin-bottom:6px">' + esc(t('language')) + '</div>' + langToggle() + '</div>' +
       '<div class="mi muted sm">' + esc(state.profile.full_name) + ' · ' + esc(state.profile.login_id) + '</div>' +
-      '<button class="mi" id="mpw">🔒 ' + esc(t('change_password')) + '</button>' +
-      '<button class="mi out" id="mlo">⎋ ' + esc(t('logout')) + '</button>';
+      '<button class="mi" id="mpw">' + esc(t('change_password')) + '</button>' +
+      '<button class="mi out" id="mlo">' + esc(t('logout')) + '</button>';
     document.body.appendChild(m);
     bindLangToggle(m, function () { closeMenu(); renderChrome(); renderContent(); });
     $('#mpw', m).onclick = function () { closeMenu(); push({ title: function () { return t('change_password'); }, render: V('changePassword') }); };
@@ -381,48 +381,48 @@
   function V(name) { return function (el, a) { var f = AMAR.views[name]; return f ? f(el, a) : placeholder(el); }; }
   // groups: p = people, a = academics, o = operations, d = data & settings
   var ADMIN = [
-    { k: 'student_records', i: '🎒', g: 'p', view: viewStudents },
-    { k: 'teacher_records', i: '🧑‍🏫', g: 'p', view: viewTeachers },
-    { k: 'parent_info', more: 1, i: '👨‍👩‍👧', g: 'p', view: viewParents },
-    { k: 'user_accounts', i: '🔑', g: 'p', view: viewAccounts },
-    { k: 'class_mgmt', i: '🏫', g: 'a', view: viewClasses },
+    { k: 'student_records', i: '', g: 'p', view: viewStudents },
+    { k: 'teacher_records', i: '', g: 'p', view: viewTeachers },
+    { k: 'parent_info', more: 1, i: '', g: 'p', view: viewParents },
+    { k: 'user_accounts', i: '', g: 'p', view: viewAccounts },
+    { k: 'class_mgmt', i: '', g: 'a', view: viewClasses },
     { k: 'subject_mgmt', i: '📚', g: 'a', name: 'classSubjects' },
-    { k: 'attendance', i: '✅', g: 'a', name: 'attendance' },
-    { k: 'marks_entry', i: '📝', g: 'a', name: 'marksEntry' },
-    { k: 'exams_manage', more: 1, i: '📝', g: 'a', name: 'exams' },
-    { k: 'grade_sheet', i: '🏅', g: 'a', name: 'resultsLedger' },
-    { k: 'auto_reports', more: 1, i: '📄', g: 'a', name: 'reports' },
-    { k: 'homework', i: '📓', g: 'a', name: 'homework' },
-    { k: 'exam_routine', more: 1, i: '🗓️', g: 'a', name: 'examRoutine' },
-    { k: 'class_routine', more: 1, i: '⏰', g: 'a', name: 'timetable' },
-    { k: 'fees', i: '💰', g: 'o', name: 'fees' },
-    { k: 'notices', i: '📢', g: 'o', name: 'notices' },
-    { k: 'calendar', i: '📅', g: 'o', name: 'calendar' },
-    { k: 'staff_leave', more: 1, i: '🏖️', g: 'o', name: 'leave' },
-    { k: 'import_export', i: '📥', g: 'd', name: 'dataHub' },
-    { k: 'settings', i: '⚙️', g: 'd', name: 'settings' }
+    { k: 'attendance', i: '', g: 'a', name: 'attendance' },
+    { k: 'marks_entry', i: '', g: 'a', name: 'marksEntry' },
+    { k: 'exams_manage', more: 1, i: '', g: 'a', name: 'exams' },
+    { k: 'grade_sheet', i: '', g: 'a', name: 'resultsLedger' },
+    { k: 'auto_reports', more: 1, i: '', g: 'a', name: 'reports' },
+    { k: 'homework', i: '', g: 'a', name: 'homework' },
+    { k: 'exam_routine', more: 1, i: '', g: 'a', name: 'examRoutine' },
+    { k: 'class_routine', more: 1, i: '', g: 'a', name: 'timetable' },
+    { k: 'fees', i: '', g: 'o', name: 'fees' },
+    { k: 'notices', i: '', g: 'o', name: 'notices' },
+    { k: 'calendar', i: '', g: 'o', name: 'calendar' },
+    { k: 'staff_leave', more: 1, i: '', g: 'o', name: 'leave' },
+    { k: 'import_export', i: '', g: 'd', name: 'dataHub' },
+    { k: 'settings', i: '⚙', g: 'd', name: 'settings' }
   ];
   var TEACHER = [
-    { k: 'my_classes', i: '🏫', view: viewMyClasses },
-    { k: 'student_records', i: '🎒', view: function (el) { return viewStudents(el, true); } },
-    { k: 'attendance', i: '✅', name: 'attendance' },
-    { k: 'marks_entry', i: '📝', name: 'marksEntry' },
-    { k: 'homework', i: '📓', name: 'homework' },
-    { k: 'class_routine', i: '⏰', name: 'timetable' },
-    { k: 'notices', i: '📢', name: 'notices' },
-    { k: 'calendar', more: 1, i: '📅', name: 'calendar' },
-    { k: 'staff_leave', more: 1, i: '🏖️', name: 'leave' }
+    { k: 'my_classes', i: '', view: viewMyClasses },
+    { k: 'student_records', i: '', view: function (el) { return viewStudents(el, true); } },
+    { k: 'attendance', i: '', name: 'attendance' },
+    { k: 'marks_entry', i: '', name: 'marksEntry' },
+    { k: 'homework', i: '', name: 'homework' },
+    { k: 'class_routine', i: '', name: 'timetable' },
+    { k: 'notices', i: '', name: 'notices' },
+    { k: 'calendar', more: 1, i: '', name: 'calendar' },
+    { k: 'staff_leave', more: 1, i: '', name: 'leave' }
   ];
   var PARENT = [
-    { k: 'teachers', i: '👩‍🏫', view: viewChildTeachers },
-    { k: 'homework', i: '📓', name: 'homework' },
-    { k: 'attendance', i: '✅', name: 'attendance' },
-    { k: 'examination', i: '📄', name: 'results' },
-    { k: 'exam_routine', i: '🗓️', name: 'examRoutine' },
-    { k: 'account', i: '💰', name: 'fees' },
-    { k: 'calendar', i: '📅', name: 'calendar' },
-    { k: 'timetable', i: '⏰', name: 'timetable' },
-    { k: 'inbox', i: '🔔', name: 'inbox' }
+    { k: 'teachers', i: '', view: viewChildTeachers },
+    { k: 'homework', i: '', name: 'homework' },
+    { k: 'attendance', i: '', name: 'attendance' },
+    { k: 'examination', i: '', name: 'results' },
+    { k: 'exam_routine', i: '', name: 'examRoutine' },
+    { k: 'account', i: '', name: 'fees' },
+    { k: 'calendar', i: '', name: 'calendar' },
+    { k: 'timetable', i: '', name: 'timetable' },
+    { k: 'inbox', i: '', name: 'inbox' }
   ];
   var GROUPS = { p: ['grp_people', 'g-blue'], a: ['grp_academics', 'g-green'], o: ['grp_operations', 'g-orange'], d: ['grp_data', 'g-purple'], x: ['', 'g-blue'] };
   var PALETTE = ['g-blue', 'g-green', 'g-purple', 'g-orange'];
@@ -445,9 +445,10 @@
     calendar: '<rect x="3.5" y="5" width="17" height="15" rx="2.5"/><path d="M3.5 10h17M8 3v4M16 3v4"/>',
     clock: '<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>',
     file: '<path d="M6 3h8l4 4v14H6z"/><path d="M14 3v4h4M9 12h6M9 16h6"/>',
+    home: '<path d="M3 11l9-8 9 8"/><path d="M5 10v10h14V10"/><path d="M10 20v-6h4v6"/>',
     mail: '<rect x="3" y="5" width="18" height="14" rx="2.5"/><path d="M3.5 7l8.5 6 8.5-6"/>'
   };
-  var ICK = { student_records: 'users', parent_info: 'users', teacher_records: 'cap', teachers: 'cap', user_accounts: 'key', class_mgmt: 'school', my_classes: 'school', subject_mgmt: 'book', attendance: 'check', marks_entry: 'pencil', exams_manage: 'file', grade_sheet: 'award', auto_reports: 'file', examination: 'file', exam_routine: 'file', homework: 'book', class_routine: 'clock', timetable: 'clock', fees: 'wallet', account: 'wallet', notices: 'bell', inbox: 'mail', calendar: 'calendar', staff_leave: 'calendar', import_export: 'upload', settings: 'gear', more: 'dots', admin: 'school', teacher: 'cap', parent: 'users' };
+  var ICK = { home: 'home', marksEntry: 'pencil', results: 'award', student_records: 'users', parent_info: 'users', teacher_records: 'cap', teachers: 'cap', user_accounts: 'key', class_mgmt: 'school', my_classes: 'school', subject_mgmt: 'book', attendance: 'check', marks_entry: 'pencil', exams_manage: 'file', grade_sheet: 'award', auto_reports: 'file', examination: 'file', exam_routine: 'file', homework: 'book', class_routine: 'clock', timetable: 'clock', fees: 'wallet', account: 'wallet', notices: 'bell', inbox: 'mail', calendar: 'calendar', staff_leave: 'calendar', import_export: 'upload', settings: 'gear', more: 'dots', admin: 'school', teacher: 'cap', parent: 'users' };
   function iconSvg(k, fb) { var p = ICP[ICK[k]]; return p ? '<svg viewBox="0 0 24 24" aria-hidden="true">' + p + '</svg>' : fb; }
   function tileHtml(f, i) {
     var cls = f.g ? GROUPS[f.g][1] : PALETTE[i % 4];
@@ -486,7 +487,7 @@
     });
   }
   function placeholder(el) {
-    el.innerHTML = '<div class="empty"><div style="font-size:56px">🛠️</div><h3>' + esc(t('not_implemented')) + '</h3><p>' + esc(t('coming_in_phase')) + '</p></div>';
+    el.innerHTML = '<div class="empty"><div style="font-size:56px">🛠</div><h3>' + esc(t('not_implemented')) + '</h3><p>' + esc(t('coming_in_phase')) + '</p></div>';
   }
   function viewInbox(el) { return V('inbox')(el); }
 
@@ -519,8 +520,8 @@
     } else if (p.role === 'teacher') {
       var tr = must(await db.from('teachers').select('id, teacher_code, full_name, photo_url').eq('user_id', p.id).maybeSingle());
       var rows = tr ? must(await db.from('teacher_assignments').select('id, classes(name), sections(name), subjects(name)').eq('teacher_id', tr.id)) : [];
-      hdr.innerHTML = '<div class="hdr"><div class="ph" data-photo="' + esc(tr && tr.photo_url) + '"><span>🧑‍🏫</span></div>' +
-        '<div class="hn">' + esc(p.full_name) + '</div><div class="hl">🪪 ' + esc(t('teacher_id')) + ': ' + esc(p.login_id) + '</div></div>';
+      hdr.innerHTML = '<div class="hdr"><div class="ph" data-photo="' + esc(tr && tr.photo_url) + '"><span class=\"av\"><svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4.4 3.6-7 8-7s8 2.6 8 7"/></svg></span></div>' +
+        '<div class="hn">' + esc(p.full_name) + '</div><div class="hl">' + esc(t('teacher_id')) + ': ' + esc(p.login_id) + '</div></div>';
       info.innerHTML = '<div class="info"><h3>' + esc(t('assignments')) + '</h3>' +
         (rows.length ? rows.map(function (r) {
           return '<span class="chip">' + esc(r.classes ? r.classes.name : '') + (r.sections ? ' ' + esc(r.sections.name) : '') +
@@ -536,11 +537,11 @@
           return '<option value="' + x.id + '"' + (x.id === state.child ? ' selected' : '') + '>' + esc(x.full_name) + '</option>';
         }).join('') + '</select>';
       }
-      hdr.innerHTML = '<div class="hdr"><div class="ph" data-photo="' + esc(c.photo_url) + '"><span>🧒</span></div>' +
+      hdr.innerHTML = '<div class="hdr"><div class="ph" data-photo="' + esc(c.photo_url) + '"><span class=\"av\"><svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4.4 3.6-7 8-7s8 2.6 8 7"/></svg></span></div>' +
         '<div class="hn">' + esc(c.full_name) + '</div>' +
-        '<div class="hl">🎓 ' + esc(t('class')) + ': ' + esc(c.classes ? c.classes.name : '–') + (c.sections ? ' ' + esc(c.sections.name) : '') +
+        '<div class="hl">' + esc(t('class')) + ': ' + esc(c.classes ? c.classes.name : '–') + (c.sections ? ' ' + esc(c.sections.name) : '') +
         (c.roll_no ? ' | ' + esc(t('roll')) + ' ' + esc(c.roll_no) : '') + '</div>' +
-        '<div class="hl">🪪 ' + esc(t('regd_no')) + ' ' + esc(c.student_code) + '</div>' + sw + '</div>';
+        '<div class="hl">' + esc(t('regd_no')) + ' ' + esc(c.student_code) + '</div>' + sw + '</div>';
       info.innerHTML = '<div class="info"><h3>' + esc(t('additional_info')) + '</h3>' +
         irow('guardian', c.guardian_name) + irow('contact_no', c.guardian_phone) + irow('address', c.address) +
         irow('house', c.house) + irow('blood_group_s', c.blood_group) + irow('emis_no', c.emis_no) + irow('dob', c.dob) + '</div>';
@@ -584,7 +585,7 @@
     var ne = state.lang === 'ne';
     el.innerHTML = rows.length ? rows.map(function (r) {
       var subj = ne ? (r.subject_name_ne || r.subject_name) : r.subject_name;
-      return '<div class="card row"><div class="ph sm" data-photo="' + esc(r.photo_path) + '"><span>👩‍🏫</span></div><div><h4>' +
+      return '<div class="card row"><div class="ph sm" data-photo="' + esc(r.photo_path) + '"><span class=\"av\"><svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4.4 3.6-7 8-7s8 2.6 8 7"/></svg></span></div><div><h4>' +
         esc(r.teacher_name) + '</h4>' + (subj ? '<span class="chip">' + esc(subj) + '</span>' : '') + '</div></div>';
     }).join('') : emptyMsg();
     hydratePhotos(el);
@@ -655,7 +656,7 @@
       cls.map(function (c) { return '<option value="' + c.id + '">' + esc(c.name) + '</option>'; }).join('') + '</select>' +
       '<select class="search" id="sf"><option value="active">' + esc(t('active')) + '</option><option value="transferred">' + esc(t('transferred')) +
       '</option><option value="archived">' + esc(t('archived')) + '</option><option value="">' + esc(t('status_all')) + '</option></select>' +
-      '<div id="list"></div><button class="btn small" id="exp" style="margin-top:8px">⬇ ' + esc(t('export_csv')) + '</button>';
+      '<div id="list"></div><button class="btn small" id="exp" style="margin-top:8px">' + esc(t('export_csv')) + '</button>';
     var filtered = rows;
     function draw() {
       var q = $('#q', el).value.trim().toLowerCase(), cf = $('#cf', el).value, sf = $('#sf', el).value;
@@ -693,18 +694,18 @@
   function studentProfile(r, ro) {
     push({ title: function () { return r.full_name; }, render: async function (el) {
       var so = []; try { so = must(await db.from('student_optionals').select('slot, subjects(name)').eq('student_id', r.id).order('slot')); } catch (e) {}
-      function row(l, v, tel) { return v ? '<div class="irow"><span>' + l + '</span><b>' + (tel ? '<a href="tel:' + esc(v) + '">📞 ' + esc(v) + '</a>' : esc(v)) + '</b></div>' : ''; }
+      function row(l, v, tel) { return v ? '<div class="irow"><span>' + l + '</span><b>' + (tel ? '<a href="tel:' + esc(v) + '">' + esc(v) + '</a>' : esc(v)) + '</b></div>' : ''; }
       var cl = (r.classes ? r.classes.name : '–') + (r.sections ? ' ' + r.sections.name : '');
-      el.innerHTML = '<div class="hdr"><div class="ph" data-photo="' + esc(r.photo_url) + '"><span>🎒</span></div><div class="hn">' + esc(r.full_name) + '</div><div class="hl">' + esc(r.full_name_ne || '') + '</div><div class="hl">🎓 ' + esc(cl) + (r.roll_no ? ' · Roll ' + esc(r.roll_no) : '') + '</div></div>' +
+      el.innerHTML = '<div class="hdr"><div class="ph" data-photo="' + esc(r.photo_url) + '"><span class=\"av\"><svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4.4 3.6-7 8-7s8 2.6 8 7"/></svg></span></div><div class="hn">' + esc(r.full_name) + '</div><div class="hl">' + esc(r.full_name_ne || '') + '</div><div class="hl">' + esc(cl) + (r.roll_no ? ' · Roll ' + esc(r.roll_no) : '') + '</div></div>' +
         '<div class="card info">' + row('Student ID', r.student_code) + row('Admission no', r.admission_no) + row('EMIS no', r.emis_no) + row('Gender', r.gender) + row('Date of birth (BS)', r.dob_bs) + row('Date of birth (AD)', r.dob) + row('Blood group', r.blood_group) + row('House', r.house) +
         row('Father', r.father_name) + row('Mother', r.mother_name) + row('Guardian', r.guardian_name) + row('Guardian phone', r.guardian_phone, 1) + row('Emergency phone', r.emergency_phone, 1) + row('Address', r.address) + row('Previous school', r.previous_school) + row('Status', r.status) +
         so.map(function (x) { return row('Optional ' + (x.slot === 1 ? 'I' : 'II'), x.subjects && x.subjects.name); }).join('') + '</div><div id="pa"></div>';
       hydratePhotos(el);
-      var acts = ro ? [] : [{ icon: '✏️', label: t('edit'), fn: function () { studentForm(r); } }];
+      var acts = ro ? [] : [{ icon: '✏', label: t('edit'), fn: function () { studentForm(r); } }];
       if (AMAR.studentActions) acts = acts.concat(AMAR.studentActions(r, ro));
       var pa = $('#pa', el);
       acts.forEach(function (a) { var b = document.createElement('button'); b.className = 'btn'; b.style.cssText = 'width:100%;margin-top:8px'; b.textContent = a.icon + ' ' + a.label; b.onclick = a.fn; pa.appendChild(b); });
-      if (!ro) { var d = document.createElement('button'); d.className = 'btn danger'; d.style.cssText = 'width:100%;margin-top:8px'; d.textContent = '🗑 Delete this student';
+      if (!ro) { var d = document.createElement('button'); d.className = 'btn danger'; d.style.cssText = 'width:100%;margin-top:8px'; d.textContent = 'Delete this student';
         d.onclick = async function () { if (!confirm('Delete ' + r.full_name + ' and all their records? This cannot be undone.')) return; try { must(await db.from('students').delete().eq('id', r.id)); toast('Deleted'); pop(); } catch (e) { toast(errText(e), true); } }; pa.appendChild(d); }
     } });
   }
@@ -769,7 +770,7 @@
     var rows = must(await db.from('teachers').select('id, user_id, teacher_code, full_name, full_name_ne, phone, address, photo_url').order('full_name'));
     el.innerHTML = '<button class="btn primary" id="addt" style="margin-bottom:12px">＋ ' + esc(t('add_teacher')) + '</button>' +
       (rows.length ? rows.map(function (r) {
-        return '<div class="card tap row" data-id="' + r.id + '"><div class="ph sm" data-photo="' + esc(r.photo_url) + '"><span>🧑‍🏫</span></div><div><h4>' +
+        return '<div class="card tap row" data-id="' + r.id + '"><div class="ph sm" data-photo="' + esc(r.photo_url) + '"><span class=\"av\"><svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4.4 3.6-7 8-7s8 2.6 8 7"/></svg></span></div><div><h4>' +
           esc(r.full_name) + (r.full_name_ne ? ' · ' + esc(r.full_name_ne) : '') + '</h4><div class="muted">' + esc(r.teacher_code) + (r.phone ? ' · ' + esc(r.phone) : '') + '</div></div></div>';
       }).join('') : emptyMsg());
     hydratePhotos(el);
@@ -810,7 +811,7 @@
           }
         } catch (ex) { fails.push(errText(ex)); }
         $('#pout', e).innerHTML = '<div class="note ok">✓ ' + ok + ' parent logins created' + (fails.length ? ' · ' + fails.length + ' failed' : '') + '</div>' + fails.slice(0, 20).map(function (f) { return '<div class="card err">' + esc(f) + '</div>'; }).join('') +
-          '<button class="btn primary" id="pdl">⬇ Download list (mobile number + password)</button>';
+          '<button class="btn primary" id="pdl">Download list (mobile number + password)</button>';
         $('#pdl', e).onclick = function () { downloadCsv('parent-logins.csv', [['Mobile number (login)', 'Parent', 'Password', 'Student IDs']].concat(done.map(function (d) { return [d.login_id, d.full_name, d.password, d.student_codes]; }))); };
         go.remove();
       };
@@ -840,11 +841,11 @@
     push({ title: function () { return tr.full_name; }, render: async function (el) {
       async function draw() {
         var rows = must(await db.from('teacher_assignments').select('id, classes(name), sections(name), subjects(name)').eq('teacher_id', tr.id));
-        el.innerHTML = '<div class="card row"><div class="ph sm" data-photo="' + esc(tr.photo_url) + '"><span>🧑‍🏫</span></div><div style="flex:1"><h4>' + esc(tr.full_name) +
-          '</h4><div class="muted">ID: ' + esc(tr.teacher_code) + '</div>' + (tr.phone ? '<div class="muted"><a href="tel:' + esc(tr.phone) + '">📞 ' + esc(tr.phone) + '</a></div>' : '') + (tr.address ? '<div class="muted">📍 ' + esc(tr.address) + '</div>' : '') + '</div></div>' +
-          '<label class="btn small" style="display:inline-block;margin-bottom:12px">📷 ' + esc(t('change_photo')) + '<input id="tph" type="file" accept="image/*" hidden></label>' +
+        el.innerHTML = '<div class="card row"><div class="ph sm" data-photo="' + esc(tr.photo_url) + '"><span class=\"av\"><svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4.4 3.6-7 8-7s8 2.6 8 7"/></svg></span></div><div style="flex:1"><h4>' + esc(tr.full_name) +
+          '</h4><div class="muted">ID: ' + esc(tr.teacher_code) + '</div>' + (tr.phone ? '<div class="muted"><a href="tel:' + esc(tr.phone) + '">' + esc(tr.phone) + '</a></div>' : '') + (tr.address ? '<div class="muted">' + esc(tr.address) + '</div>' : '') + '</div></div>' +
+          '<label class="btn small" style="display:inline-block;margin-bottom:12px">' + esc(t('change_photo')) + '<input id="tph" type="file" accept="image/*" hidden></label>' +
           '<h3>' + esc(t('assignments')) + '</h3>' + assignmentsHtml(rows, true) +
-          '<button class="btn primary" id="adda" style="margin-top:8px">＋ ' + esc(t('add_assignment')) + '</button><button class="btn danger" id="delt" style="margin-top:8px;width:100%">🗑 Delete this teacher</button>';
+          '<button class="btn primary" id="adda" style="margin-top:8px">＋ ' + esc(t('add_assignment')) + '</button><button class="btn danger" id="delt" style="margin-top:8px;width:100%">Delete this teacher</button>';
         hydratePhotos(el);
         $('#tph', el).addEventListener('change', async function (ev) {
           var f = ev.target.files[0]; if (!f) return;
@@ -932,14 +933,14 @@
     el.innerHTML = '<div class="seg" id="atabs" style="display:flex">' + ['teacher', 'parent', 'admin'].map(function (r) {
       return '<button style="flex:1" data-r="' + r + '" class="' + (r === tab ? 'on' : '') + '">' + NAMES[r] + ' (' + all.filter(function (x) { return x.role === r; }).length + ')</button>'; }).join('') + '</div>' +
       '<div class="note">Everyone signs in with a <b>Login ID</b> and a <b>Password</b>. Tap the blue button to make a new ' + ONE[tab].toLowerCase() + ' login.</div>' +
-      (tab === 'parent' ? '<button class="btn primary" id="apf" style="margin-bottom:10px">📱 Make parent logins from students’ phone numbers</button>' : '') +
+      (tab === 'parent' ? '<button class="btn primary" id="apf" style="margin-bottom:10px">Make parent logins from students’ phone numbers</button>' : '') +
       '<button class="btn' + (tab === 'parent' ? '' : ' primary') + '" id="adma" style="margin-bottom:12px">＋ Add one ' + ONE[tab] + ' login</button>' +
       (rows.length ? rows.map(function (r) {
         var me = r.id === state.profile.id;
         return '<div class="card"><div class="row between"><div><h4>' + esc(r.full_name) + '</h4><div class="muted sm">Login ID: <b>' + esc(r.login_id) + '</b></div></div>' +
           '<span class="chip ' + (r.is_active ? 'ok' : 'bad') + '">' + esc(t(r.is_active ? 'active' : 'inactive')) + '</span></div>' +
           '<div class="row" style="margin-top:10px"><button class="btn small" data-rp="' + r.id + '">New password</button>' +
-          (me ? '' : '<button class="btn small ' + (r.is_active ? 'danger' : '') + '" data-act="' + r.id + '" data-to="' + (r.is_active ? 0 : 1) + '">' + esc(t(r.is_active ? 'deactivate' : 'activate')) + '</button>') + (me ? '' : '<button class="btn small danger" data-dacc="' + r.id + '">🗑 Delete</button>') + '</div></div>';
+          (me ? '' : '<button class="btn small ' + (r.is_active ? 'danger' : '') + '" data-act="' + r.id + '" data-to="' + (r.is_active ? 0 : 1) + '">' + esc(t(r.is_active ? 'deactivate' : 'activate')) + '</button>') + (me ? '' : '<button class="btn small danger" data-dacc="' + r.id + '">Delete</button>') + '</div></div>';
       }).join('') : '<div class="empty">No ' + NAMES[tab].toLowerCase() + ' yet.</div>');
     el.querySelectorAll('#atabs button').forEach(function (b) { b.onclick = function () { state.accTab = b.getAttribute('data-r'); viewAccounts(el); }; });
     $('#adma', el).onclick = function () { createAccountView(tab); };
@@ -1041,7 +1042,7 @@
   /* Print / Save-as-PDF view (uses the phone's own print dialog -> "Save as PDF") */
   function printable(title, html) {
     push({ title: function () { return title; }, render: function (el) {
-      el.innerHTML = '<div class="noprint" style="margin-bottom:12px"><button class="btn primary" id="pbtn">🖨 ' + esc(t('print_save_pdf')) + '</button>' +
+      el.innerHTML = '<div class="noprint" style="margin-bottom:12px"><button class="btn primary" id="pbtn">' + esc(t('print_save_pdf')) + '</button>' +
         '<p class="muted sm">' + esc(t('print_hint')) + '</p></div><div class="printable">' + html + '</div>';
       $('#pbtn', el).onclick = function () { window.print(); };
       hydratePhotos(el);
