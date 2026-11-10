@@ -26,7 +26,13 @@
     if (l <= 10) return { c: ['Nepali', 'English', 'Mathematics', 'Science and Technology', 'Social Studies'], o: ['Optional Mathematics', 'Computer Science', 'Accountancy', 'Economics', 'Population and Environment Education'] };
     return { c: ['Nepali', 'English', 'Social Studies and Life Skills'], o: ['Physics', 'Chemistry', 'Biology', 'Mathematics', 'Computer Science', 'Accountancy', 'Business Studies', 'Economics', 'Business Mathematics', 'Marketing', 'Sociology'] };
   }
-  async function loadCS() { return must(await db.from('class_subjects').select('class_id,subject_id,is_compulsory,opt_slot')); }
+  async function loadCS() { var r = await db.from('class_subjects').select('class_id,subject_id,is_compulsory,opt_slot,theory_marks,internal_marks,credit_hours'); if (r.error) r = await db.from('class_subjects').select('class_id,subject_id,is_compulsory,opt_slot'); return must(r); }
+  var CORE5B = ['Nepali', 'English', 'Mathematics', 'Science and Technology'];
+  function dflt(l, n) { var b = l >= 4 && l <= 10; return { th: b ? 75 : 100, inn: b ? 25 : 0, ch: b ? (CORE5B.indexOf(n) >= 0 ? 5 : 4) : 4 }; }
+  async function syncExam(cid, sid, th, inn, ch) {   // push new marks / credit hours to this class+subject in every unpublished exam
+    var ex = must(await db.from('exams').select('id,name,exam_type,status')).filter(function (e) { return e.status !== 'published'; });
+    for (var i = 0; i < ex.length; i++) { var mid = isMid(ex[i]); await db.from('exam_subjects').update({ theory_marks: mid ? th + inn : th, internal_marks: mid ? 0 : inn, credit_hours: mid ? ch / 2 : ch }).eq('exam_id', ex[i].id).eq('class_id', cid).eq('subject_id', sid); }
+  }
 
   async function ensureDefaults(onlyClass, force) {
     if (state.profile.role !== 'admin') return;
@@ -40,8 +46,8 @@
     var id = {}; lk.subjects.forEach(function (s) { id[s.name] = s.id; });
     if (force) must(await db.from('class_subjects').delete().eq('class_id', onlyClass));
     var out = []; classes.forEach(function (c) { var p = plan(c.level);
-      p.c.forEach(function (n) { out.push({ class_id: c.id, subject_id: id[n], is_compulsory: true }); });
-      p.o.forEach(function (n) { out.push({ class_id: c.id, subject_id: id[n], is_compulsory: false, opt_slot: slotOf(n, c.level) }); }); });
+      p.c.forEach(function (n) { out.push({ class_id: c.id, subject_id: id[n], is_compulsory: true, theory_marks: dflt(c.level, n).th, internal_marks: dflt(c.level, n).inn, credit_hours: dflt(c.level, n).ch }); });
+      p.o.forEach(function (n) { out.push({ class_id: c.id, subject_id: id[n], is_compulsory: false, opt_slot: slotOf(n, c.level), theory_marks: dflt(c.level, n).th, internal_marks: dflt(c.level, n).inn, credit_hours: dflt(c.level, n).ch }); }); });
     must(await db.from('class_subjects').upsert(out, { onConflict: 'class_id,subject_id' }));
   }
 
@@ -54,10 +60,12 @@
     el.innerHTML = '<div class="note">Pick a class. For each subject choose <b>Compulsory</b>, <b>Optional I</b>, <b>Optional II</b> or <b>Not taught</b>. Marks entry uses this list: all compulsory subjects, plus Optional I and Optional II (each student picks one subject in each). These are the usual Nepal (CDC / NEB) subjects – change anything to match your school.</div>' +
       '<select id="cs" class="search">' + lk.classes.map(function (c) { return '<option value="' + c.id + '">' + esc(A.nm(c)) + '</option>'; }).join('') + '</select><div id="cl"></div>';
     async function draw() {
-      var cid = $('#cs', el).value, cs = await loadCS(), mine = {}; cs.filter(function (r) { return r.class_id === cid; }).forEach(function (r) { mine[r.subject_id] = r.is_compulsory ? 'c' : (r.opt_slot === 2 ? 'o2' : 'o1'); });
+      var cid = $('#cs', el).value, cs = await loadCS(), mine = {}, csm = {}; cs.filter(function (r) { return r.class_id === cid; }).forEach(function (r) { csm[r.subject_id] = r; }); cs.filter(function (r) { return r.class_id === cid; }).forEach(function (r) { mine[r.subject_id] = r.is_compulsory ? 'c' : (r.opt_slot === 2 ? 'o2' : 'o1'); });
       var subs = lk.subjects.slice().sort(function (a, b) { return (mine[b.id] ? 1 : 0) - (mine[a.id] ? 1 : 0) || (mine[a.id] === 'c' ? -1 : 0) - (mine[b.id] === 'c' ? -1 : 0); });
-      $('#cl', el).innerHTML = subs.map(function (s) { var v = mine[s.id] || 'n';
-        return '<div class="card row between"><b>' + esc(A.nm(s)) + '</b><select data-s="' + s.id + '" class="mini-sel"><option value="c"' + (v === 'c' ? ' selected' : '') + '>Compulsory</option><option value="o1"' + (v === 'o1' ? ' selected' : '') + '>Optional I</option><option value="o2"' + (v === 'o2' ? ' selected' : '') + '>Optional II</option><option value="n"' + (v === 'n' ? ' selected' : '') + '>Not taught</option></select><button class="btn small danger" data-ds="' + s.id + '" style="margin-left:6px">🗑</button></div>'; }).join('') +
+      $('#cl', el).innerHTML = subs.map(function (s) { var v = mine[s.id] || 'n', cl0 = lk.classes.filter(function (c) { return c.id === cid; })[0], d = dflt(cl0.level, s.name), q = csm[s.id] || {};
+        function nv(x, y) { return x != null ? x : y; }
+        return '<div class="card"><div class="row between"><b style="flex:1">' + esc(A.nm(s)) + '</b><select data-s="' + s.id + '" class="mini-sel"><option value="c"' + (v === 'c' ? ' selected' : '') + '>Compulsory</option><option value="o1"' + (v === 'o1' ? ' selected' : '') + '>Optional I</option><option value="o2"' + (v === 'o2' ? ' selected' : '') + '>Optional II</option><option value="n"' + (v === 'n' ? ' selected' : '') + '>Not taught</option></select><button class="btn small danger" data-ds="' + s.id + '" style="margin-left:6px">🗑</button></div>' +
+          (v === 'n' ? '' : '<div class="mrow"><label>Theory marks<input type="number" data-f="' + s.id + '" value="' + nv(q.theory_marks, d.th) + '"></label><label>Internal marks<input type="number" data-f="' + s.id + '" value="' + nv(q.internal_marks, d.inn) + '"></label><label>Credit hours<input type="number" step="0.25" data-f="' + s.id + '" value="' + nv(q.credit_hours, d.ch) + '"></label></div>') + '</div>'; }).join('') +
         '<div class="row mt"><input id="ns" class="search" placeholder="New subject name"><button class="btn small" id="nsb">＋ Add</button></div>' +
         '<button class="btn primary mt" id="cpy" style="width:100%">⧉ Copy this setup to ALL other classes</button><button class="btn mt" id="rs" style="width:100%">↺ Reset this class to Nepal defaults</button>';
       el.querySelectorAll('[data-s]').forEach(function (sel) { sel.onchange = async function () {
@@ -67,12 +75,16 @@
           toast('✓ ' + 'Saved'); } catch (e) { toast(A.errText(e), true); } }; });
       $('#nsb', el).onclick = async function () { var n = $('#ns', el).value.trim(); if (!n) return;
         try { var sch = await A.school(); must(await db.from('subjects').upsert({ school_id: sch.id, name: n }, { onConflict: 'school_id,name' })); lk = await A.lookups(true); draw(); } catch (e) { toast(A.errText(e), true); } };
+      el.querySelectorAll('[data-f]').forEach(function (inp) { inp.onchange = async function () { try {
+        var sid = inp.getAttribute('data-f'), v3 = Array.prototype.map.call(el.querySelectorAll('[data-f="' + sid + '"]'), function (x) { return +x.value || 0; });
+        must(await db.from('class_subjects').update({ theory_marks: v3[0], internal_marks: v3[1], credit_hours: v3[2] }).eq('class_id', cid).eq('subject_id', sid));
+        await syncExam(cid, sid, v3[0], v3[1], v3[2]); toast('✓ Saved'); } catch (e) { toast(A.errText(e), true); } }; });
       el.querySelectorAll('[data-ds]').forEach(function (b) { b.onclick = async function () { if (!confirm('Delete this subject from the whole school?')) return;
         try { must(await db.from('subjects').delete().eq('id', b.getAttribute('data-ds'))); lk = await A.lookups(true); draw(); } catch (e) { toast(A.errText(e), true); } }; });
       $('#cpy', el).onclick = async function () { if (!confirm('Copy Compulsory / Optional I / Optional II of this class to ALL other classes?')) return;
         try { var rows = (await loadCS()).filter(function (r) { return r.class_id === cid; }), others = lk.classes.filter(function (c) { return c.id !== cid; });
           must(await db.from('class_subjects').delete().in('class_id', others.map(function (c) { return c.id; }))); var out = [];
-          others.forEach(function (c) { rows.forEach(function (r) { out.push({ class_id: c.id, subject_id: r.subject_id, is_compulsory: r.is_compulsory, opt_slot: r.opt_slot }); }); });
+          others.forEach(function (c) { rows.forEach(function (r) { out.push({ class_id: c.id, subject_id: r.subject_id, is_compulsory: r.is_compulsory, opt_slot: r.opt_slot, theory_marks: r.theory_marks, internal_marks: r.internal_marks, credit_hours: r.credit_hours }); }); });
           must(await db.from('class_subjects').insert(out)); toast('✓ Copied to ' + others.length + ' classes'); } catch (e) { toast(A.errText(e), true); } };
       $('#rs', el).onclick = async function () { if (!confirm('Reset subjects of this class to the Nepal defaults?')) return;
         try { await ensureDefaults(cid, true); draw(); } catch (e) { toast(A.errText(e), true); } };
@@ -84,6 +96,7 @@
   var CORE5 = ['Nepali', 'English', 'Mathematics', 'Science and Technology'];
   function isMid(e) { return /mid/i.test((e.name || '') + ' ' + (e.exam_type || '')); }
   async function prepare() {
+    if (state.profile.role !== 'admin') return;   // only the admin creates the marks setup
     {
       await ensureDefaults();
       var lk = await A.lookups(true), lvl = {}; lk.classes.forEach(function (c) { lvl[c.id] = c.level; });
@@ -102,8 +115,8 @@
         }
         var have = {}; must(await db.from('exam_subjects').select('class_id,subject_id').eq('exam_id', e.id)).forEach(function (r) { have[r.class_id + '|' + r.subject_id] = 1; });
         var add = []; cs.forEach(function (r) { if (have[r.class_id + '|' + r.subject_id]) return;
-          var l = lvl[r.class_id], band = l >= 4 && l <= 10, n = sname[r.subject_id], cr = band ? (CORE5.indexOf(n) >= 0 ? 5 : 4) : 4, comp = band && !mid;
-          add.push({ exam_id: e.id, class_id: r.class_id, subject_id: r.subject_id, theory_marks: comp ? 75 : 100, practical_marks: 0, internal_marks: comp ? 25 : 0, pass_marks: 0, credit_hours: mid ? cr / 2 : cr }); });
+          var d = dflt(lvl[r.class_id], sname[r.subject_id]), th = r.theory_marks != null ? +r.theory_marks : d.th, inn = r.internal_marks != null ? +r.internal_marks : d.inn, ch = r.credit_hours != null ? +r.credit_hours : d.ch;
+          add.push({ exam_id: e.id, class_id: r.class_id, subject_id: r.subject_id, theory_marks: mid ? th + inn : th, practical_marks: 0, internal_marks: mid ? 0 : inn, pass_marks: 0, credit_hours: mid ? ch / 2 : ch }); });
         for (var i = 0; i < add.length; i += 200) must(await db.from('exam_subjects').insert(add.slice(i, i + 200)));
       }
     }
@@ -144,6 +157,7 @@
         var isOpt = v === 'o1' || v === 'o2', slot = v === 'o1' ? 1 : 2, st = await students(cid), cs = (await loadCS()).filter(function (r) { return r.class_id === cid; }), al = await allowed(cid);
         var ids = isOpt ? cs.filter(function (r) { return !r.is_compulsory && (r.opt_slot === 2 ? 2 : 1) === slot && (!al || al[r.subject_id]); }).map(function (r) { return r.subject_id; }) : [v];
         var ess = must(await db.from('exam_subjects').select('*').eq('exam_id', ex.id).eq('class_id', cid).in('subject_id', ids));
+        if (!ess.length && !admin) { box.innerHTML = '<div class="empty">Marks setup is not ready yet. Ask the admin to open Marks entry once.</div>'; return; }
         if (!ess.length) { must(await db.from('exam_subjects').insert(ids.map(function (i) { return { exam_id: ex.id, class_id: cid, subject_id: i, theory_marks: 100, practical_marks: 0, internal_marks: 0, pass_marks: 0, credit_hours: 4 }; }))); ess = must(await db.from('exam_subjects').select('*').eq('exam_id', ex.id).eq('class_id', cid).in('subject_id', ids)); }
         var es0 = ess[0], sid = st.map(function (x) { return x.id; }), so = {}, mk = {};
         if (isOpt && sid.length) must(await db.from('student_optionals').select('student_id,subject_id').eq('slot', slot).in('student_id', sid)).forEach(function (r) { so[r.student_id] = r.subject_id; });
@@ -151,13 +165,12 @@
         var P = [['theory', 'TH', +es0.theory_marks], ['practical', 'PR', +es0.practical_marks], ['internal', 'IN', +es0.internal_marks]].filter(function (p) { return p[2] > 0; }), full = P.reduce(function (a, p) { return a + p[2]; }, 0);
         var title = isOpt ? 'Optional ' + (slot === 1 ? 'I' : 'II') : A.nm(sub[v]);
         box.innerHTML = '<div class="card"><h3 style="margin:0">' + esc(title) + '</h3><div class="muted sm">' + P.map(function (p) { return p[1] + ' ' + p[2]; }).join(' + ') + ' = <b>' + full + '</b> marks &nbsp;·&nbsp; <b>' + es0.credit_hours + '</b> credit hours</div>' +
-          (admin ? '<details style="margin-top:8px"><summary>⚙ Change full marks / credit hours</summary><div class="row" style="margin-top:8px"><input id="eth" type="number" class="search" placeholder="Theory" value="' + es0.theory_marks + '"><input id="ein" type="number" class="search" placeholder="Internal" value="' + es0.internal_marks + '"><input id="ech" type="number" step="0.25" class="search" placeholder="Credit hours" value="' + es0.credit_hours + '"><button class="btn small" id="esv">Update</button></div></details>' : '') + '</div>' +
+          '</div>' +
           (st.length ? st.map(function (s) { var m = mk[s.id] || {};
             return '<div class="mk" data-id="' + s.id + '"><div class="nm"><h4>' + (s.roll_no ? s.roll_no + '. ' : '') + esc(s.full_name) + '</h4>' +
               (isOpt ? '<select class="mini-sel" data-so="' + s.id + '"><option value="">— choose subject —</option>' + opts(ids, function (i) { return '<option value="' + i + '"' + (so[s.id] === i ? ' selected' : '') + '>' + esc(A.nm(sub[i])) + '</option>'; }) + '</select>' : '') +
-              '</div><div class="in">' + opts(P, function (p) { return '<input type="number" inputmode="decimal" step="0.25" min="0" max="' + p[2] + '" data-k="' + p[0] + '" placeholder="' + p[1] + '/' + p[2] + '" value="' + (m[p[0]] == null ? '' : m[p[0]]) + '">'; }) + '<label class="ab"><input type="checkbox" data-ab' + (m.is_absent ? ' checked' : '') + '> Ab</label></div></div>'; }).join('') + '<button class="btn primary" id="sv" style="margin-top:12px;width:100%">💾 Save marks</button>' : '<div class="empty">No students in this class.</div>');
+              '</div><div class="in">' + opts(P, function (p) { return '<label class="mf"><small>' + p[1] + ' · ' + p[2] + '</small><input type="number" inputmode="decimal" step="0.25" min="0" max="' + p[2] + '" data-k="' + p[0] + '" value="' + (m[p[0]] == null ? '' : m[p[0]]) + '"></label>'; }) + '<label class="ab"><input type="checkbox" data-ab' + (m.is_absent ? ' checked' : '') + '><span>Absent</span></label></div></div>'; }).join('') + '<button class="btn primary" id="sv" style="margin-top:12px;width:100%">💾 Save marks</button>' : '<div class="empty">No students in this class.</div>');
         box.querySelectorAll('select[data-so]').forEach(function (x) { x.onchange = async function () { try { var s = x.getAttribute('data-so'); if (!x.value) must(await db.from('student_optionals').delete().eq('student_id', s).eq('slot', slot)); else must(await db.from('student_optionals').upsert({ student_id: s, slot: slot, subject_id: x.value }, { onConflict: 'student_id,slot' })); toast('✓ Subject saved'); } catch (e) { toast(A.errText(e), true); } }; });
-        if ($('#esv', box)) $('#esv', box).onclick = async function () { try { must(await db.from('exam_subjects').update({ theory_marks: +$('#eth', box).value || 0, internal_marks: +$('#ein', box).value || 0, credit_hours: +$('#ech', box).value || 0 }).in('id', ess.map(function (e) { return e.id; }))); toast('✓ Updated'); sheet(); } catch (e) { toast(A.errText(e), true); } };
         if ($('#sv', box)) $('#sv', box).onclick = async function () {
           var rows = [], bad = 0, dels = [];
           box.querySelectorAll('.mk').forEach(function (r) { r.classList.remove('bad'); var stid = r.getAttribute('data-id'), ab = r.querySelector('[data-ab]').checked, subj = v, any = ab, row = { exam_id: ex.id, student_id: stid, is_absent: ab };
