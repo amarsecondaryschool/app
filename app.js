@@ -284,9 +284,10 @@
 
   function hpush() { try { history.pushState({ a: 1 }, ''); } catch (e) {} }
   function push(view) { state.stack.push(view); hpush(); renderChrome(); renderContent(); }
-  function pop() { if (!state.stack.length) return; try { history.back(); } catch (e) { state.stack.pop(); renderChrome(); renderContent(); } }
+  function pop() { if (!state.stack.length) return; state.stack.pop(); lk = null; state.skip = (state.skip || 0) + 1; try { history.back(); } catch (e) { state.skip--; } renderChrome(); renderContent(); }
   window.addEventListener('popstate', function () {
     if (!state.profile) return;
+    if (state.skip > 0) { state.skip--; return; }
     if (state.stack.length) { state.stack.pop(); lk = null; closeMenu(); renderChrome(); renderContent(); return; }
     if (Date.now() - (state.exitT || 0) < 2000) return;       // second back press within 2 s: leave the app
     state.exitT = Date.now(); toast('Press back again to exit'); hpush();
@@ -389,38 +390,38 @@
     { k: 'attendance', i: '✅', g: 'a', name: 'attendance' },
     { k: 'marks_entry', i: '📝', g: 'a', name: 'marksEntry' },
     { k: 'exams_manage', more: 1, i: '📝', g: 'a', name: 'exams' },
-    { k: 'grade_sheet', more: 1, i: '🏅', g: 'a', name: 'resultsLedger' },
+    { k: 'grade_sheet', i: '🏅', g: 'a', name: 'resultsLedger' },
     { k: 'auto_reports', more: 1, i: '📄', g: 'a', name: 'reports' },
-    { k: 'homework', more: 1, i: '📓', g: 'a', name: 'homework' },
+    { k: 'homework', i: '📓', g: 'a', name: 'homework' },
     { k: 'exam_routine', more: 1, i: '🗓️', g: 'a', name: 'examRoutine' },
     { k: 'class_routine', more: 1, i: '⏰', g: 'a', name: 'timetable' },
     { k: 'fees', i: '💰', g: 'o', name: 'fees' },
     { k: 'notices', i: '📢', g: 'o', name: 'notices' },
-    { k: 'calendar', more: 1, i: '📅', g: 'o', name: 'calendar' },
+    { k: 'calendar', i: '📅', g: 'o', name: 'calendar' },
     { k: 'staff_leave', more: 1, i: '🏖️', g: 'o', name: 'leave' },
     { k: 'import_export', i: '📥', g: 'd', name: 'dataHub' },
-    { k: 'settings', more: 1, i: '⚙️', g: 'd', name: 'settings' }
+    { k: 'settings', i: '⚙️', g: 'd', name: 'settings' }
   ];
   var TEACHER = [
-    { k: 'my_classes', more: 1, i: '🏫', view: viewMyClasses },
+    { k: 'my_classes', i: '🏫', view: viewMyClasses },
     { k: 'student_records', i: '🎒', view: function (el) { return viewStudents(el, true); } },
     { k: 'attendance', i: '✅', name: 'attendance' },
     { k: 'marks_entry', i: '📝', name: 'marksEntry' },
     { k: 'homework', i: '📓', name: 'homework' },
-    { k: 'class_routine', more: 1, i: '⏰', name: 'timetable' },
+    { k: 'class_routine', i: '⏰', name: 'timetable' },
     { k: 'notices', i: '📢', name: 'notices' },
     { k: 'calendar', more: 1, i: '📅', name: 'calendar' },
     { k: 'staff_leave', more: 1, i: '🏖️', name: 'leave' }
   ];
   var PARENT = [
-    { k: 'teachers', more: 1, i: '👩‍🏫', view: viewChildTeachers },
+    { k: 'teachers', i: '👩‍🏫', view: viewChildTeachers },
     { k: 'homework', i: '📓', name: 'homework' },
     { k: 'attendance', i: '✅', name: 'attendance' },
     { k: 'examination', i: '📄', name: 'results' },
-    { k: 'exam_routine', more: 1, i: '🗓️', name: 'examRoutine' },
+    { k: 'exam_routine', i: '🗓️', name: 'examRoutine' },
     { k: 'account', i: '💰', name: 'fees' },
-    { k: 'calendar', more: 1, i: '📅', name: 'calendar' },
-    { k: 'timetable', more: 1, i: '⏰', name: 'timetable' },
+    { k: 'calendar', i: '📅', name: 'calendar' },
+    { k: 'timetable', i: '⏰', name: 'timetable' },
     { k: 'inbox', i: '🔔', name: 'inbox' }
   ];
   var GROUPS = { p: ['grp_people', 'g-blue'], a: ['grp_academics', 'g-green'], o: ['grp_operations', 'g-orange'], d: ['grp_data', 'g-purple'], x: ['', 'g-blue'] };
@@ -646,6 +647,7 @@
   async function viewStudents(el, ro) {
     var rows = must(await db.from('students').select('*, classes(name), sections(name)').order('full_name'));
     var cls = must(await db.from('classes').select('id, name').order('level'));
+    if (ro) cls = cls.filter(function (c) { return rows.some(function (r) { return r.class_id === c.id; }); });
     el.innerHTML = (ro ? '' : '<div class="row" style="margin-bottom:10px"><button class="btn primary" id="adds" style="flex:1">＋ ' + esc(t('add_student')) + '</button>' +
       '<button class="btn small" id="prom">⬆</button></div>') +
       '<input class="search" id="q" placeholder="' + esc(t('search')) + '">' +
@@ -671,9 +673,7 @@
         c.classList.add('tap');
         c.onclick = function () {
           var r = rows.filter(function (x) { return x.id === c.getAttribute('data-id'); })[0];
-          var acts = ro ? [] : [{ icon: '✏️', label: t('edit'), fn: function () { studentForm(r); } }];
-          if (AMAR.studentActions) acts = acts.concat(AMAR.studentActions(r, ro));
-          AMAR.sheet(r.full_name, acts);
+          studentProfile(r, ro);
         };
       });
     }
@@ -687,6 +687,26 @@
       downloadCsv('students.csv', [['Student ID', 'Admission No', 'Name', 'Name (Nepali)', 'Class', 'Section', 'Roll', 'House', 'EMIS', 'Guardian', 'Guardian phone', 'Status']]
         .concat(filtered.map(function (r) { return [r.student_code, r.admission_no, r.full_name, r.full_name_ne, r.classes && r.classes.name, r.sections && r.sections.name, r.roll_no, r.house, r.emis_no, r.guardian_name, r.guardian_phone, r.status]; })));
     };
+  }
+
+  /* Full student profile page (teachers see it for their own classes; admin can also edit / delete) */
+  function studentProfile(r, ro) {
+    push({ title: function () { return r.full_name; }, render: async function (el) {
+      var so = []; try { so = must(await db.from('student_optionals').select('slot, subjects(name)').eq('student_id', r.id).order('slot')); } catch (e) {}
+      function row(l, v, tel) { return v ? '<div class="irow"><span>' + l + '</span><b>' + (tel ? '<a href="tel:' + esc(v) + '">📞 ' + esc(v) + '</a>' : esc(v)) + '</b></div>' : ''; }
+      var cl = (r.classes ? r.classes.name : '–') + (r.sections ? ' ' + r.sections.name : '');
+      el.innerHTML = '<div class="hdr"><div class="ph" data-photo="' + esc(r.photo_url) + '"><span>🎒</span></div><div class="hn">' + esc(r.full_name) + '</div><div class="hl">' + esc(r.full_name_ne || '') + '</div><div class="hl">🎓 ' + esc(cl) + (r.roll_no ? ' · Roll ' + esc(r.roll_no) : '') + '</div></div>' +
+        '<div class="card info">' + row('Student ID', r.student_code) + row('Admission no', r.admission_no) + row('EMIS no', r.emis_no) + row('Gender', r.gender) + row('Date of birth (BS)', r.dob_bs) + row('Date of birth (AD)', r.dob) + row('Blood group', r.blood_group) + row('House', r.house) +
+        row('Father', r.father_name) + row('Mother', r.mother_name) + row('Guardian', r.guardian_name) + row('Guardian phone', r.guardian_phone, 1) + row('Emergency phone', r.emergency_phone, 1) + row('Address', r.address) + row('Previous school', r.previous_school) + row('Status', r.status) +
+        so.map(function (x) { return row('Optional ' + (x.slot === 1 ? 'I' : 'II'), x.subjects && x.subjects.name); }).join('') + '</div><div id="pa"></div>';
+      hydratePhotos(el);
+      var acts = ro ? [] : [{ icon: '✏️', label: t('edit'), fn: function () { studentForm(r); } }];
+      if (AMAR.studentActions) acts = acts.concat(AMAR.studentActions(r, ro));
+      var pa = $('#pa', el);
+      acts.forEach(function (a) { var b = document.createElement('button'); b.className = 'btn'; b.style.cssText = 'width:100%;margin-top:8px'; b.textContent = a.icon + ' ' + a.label; b.onclick = a.fn; pa.appendChild(b); });
+      if (!ro) { var d = document.createElement('button'); d.className = 'btn danger'; d.style.cssText = 'width:100%;margin-top:8px'; d.textContent = '🗑 Delete this student';
+        d.onclick = async function () { if (!confirm('Delete ' + r.full_name + ' and all their records? This cannot be undone.')) return; try { must(await db.from('students').delete().eq('id', r.id)); toast('Deleted'); pop(); } catch (e) { toast(errText(e), true); } }; pa.appendChild(d); }
+    } });
   }
 
   function promoteView() {
@@ -746,7 +766,7 @@
 
   /* ---------- admin: teachers ---------- */
   async function viewTeachers(el) {
-    var rows = must(await db.from('teachers').select('id, user_id, teacher_code, full_name, full_name_ne, phone, photo_url').order('full_name'));
+    var rows = must(await db.from('teachers').select('id, user_id, teacher_code, full_name, full_name_ne, phone, address, photo_url').order('full_name'));
     el.innerHTML = '<button class="btn primary" id="addt" style="margin-bottom:12px">＋ ' + esc(t('add_teacher')) + '</button>' +
       (rows.length ? rows.map(function (r) {
         return '<div class="card tap row" data-id="' + r.id + '"><div class="ph sm" data-photo="' + esc(r.photo_url) + '"><span>🧑‍🏫</span></div><div><h4>' +
@@ -821,10 +841,10 @@
       async function draw() {
         var rows = must(await db.from('teacher_assignments').select('id, classes(name), sections(name), subjects(name)').eq('teacher_id', tr.id));
         el.innerHTML = '<div class="card row"><div class="ph sm" data-photo="' + esc(tr.photo_url) + '"><span>🧑‍🏫</span></div><div style="flex:1"><h4>' + esc(tr.full_name) +
-          '</h4><div class="muted">' + esc(tr.teacher_code) + '</div></div></div>' +
+          '</h4><div class="muted">ID: ' + esc(tr.teacher_code) + '</div>' + (tr.phone ? '<div class="muted"><a href="tel:' + esc(tr.phone) + '">📞 ' + esc(tr.phone) + '</a></div>' : '') + (tr.address ? '<div class="muted">📍 ' + esc(tr.address) + '</div>' : '') + '</div></div>' +
           '<label class="btn small" style="display:inline-block;margin-bottom:12px">📷 ' + esc(t('change_photo')) + '<input id="tph" type="file" accept="image/*" hidden></label>' +
           '<h3>' + esc(t('assignments')) + '</h3>' + assignmentsHtml(rows, true) +
-          '<button class="btn primary" id="adda" style="margin-top:8px">＋ ' + esc(t('add_assignment')) + '</button>';
+          '<button class="btn primary" id="adda" style="margin-top:8px">＋ ' + esc(t('add_assignment')) + '</button><button class="btn danger" id="delt" style="margin-top:8px;width:100%">🗑 Delete this teacher</button>';
         hydratePhotos(el);
         $('#tph', el).addEventListener('change', async function (ev) {
           var f = ev.target.files[0]; if (!f) return;
@@ -838,6 +858,8 @@
         el.querySelectorAll('[data-del]').forEach(function (b) {
           b.onclick = async function () { try { must(await db.from('teacher_assignments').delete().eq('id', b.getAttribute('data-del'))); draw(); } catch (e) { toast(errText(e), true); } };
         });
+        $('#delt', el).onclick = async function () { if (!confirm('Delete teacher ' + tr.full_name + ' and their login? This cannot be undone.')) return;
+          try { if (tr.user_id) must(await db.rpc('admin_delete_account', { p_user: tr.user_id })); else must(await db.from('teachers').delete().eq('id', tr.id)); toast('Deleted'); pop(); } catch (e) { toast(errText(e), true); } };
         $('#adda', el).onclick = function () {
           push({ title: function () { return t('add_assignment'); }, render: async function (e) {
             var cls = must(await db.from('classes').select('id, name').order('level'));
@@ -917,7 +939,7 @@
         return '<div class="card"><div class="row between"><div><h4>' + esc(r.full_name) + '</h4><div class="muted sm">Login ID: <b>' + esc(r.login_id) + '</b></div></div>' +
           '<span class="chip ' + (r.is_active ? 'ok' : 'bad') + '">' + esc(t(r.is_active ? 'active' : 'inactive')) + '</span></div>' +
           '<div class="row" style="margin-top:10px"><button class="btn small" data-rp="' + r.id + '">New password</button>' +
-          (me ? '' : '<button class="btn small ' + (r.is_active ? 'danger' : '') + '" data-act="' + r.id + '" data-to="' + (r.is_active ? 0 : 1) + '">' + esc(t(r.is_active ? 'deactivate' : 'activate')) + '</button>') + '</div></div>';
+          (me ? '' : '<button class="btn small ' + (r.is_active ? 'danger' : '') + '" data-act="' + r.id + '" data-to="' + (r.is_active ? 0 : 1) + '">' + esc(t(r.is_active ? 'deactivate' : 'activate')) + '</button>') + (me ? '' : '<button class="btn small danger" data-dacc="' + r.id + '">🗑 Delete</button>') + '</div></div>';
       }).join('') : '<div class="empty">No ' + NAMES[tab].toLowerCase() + ' yet.</div>');
     el.querySelectorAll('#atabs button').forEach(function (b) { b.onclick = function () { state.accTab = b.getAttribute('data-r'); viewAccounts(el); }; });
     $('#adma', el).onclick = function () { createAccountView(tab); };
@@ -928,6 +950,7 @@
         catch (e) { toast(errText(e), true); }
       };
     });
+    el.querySelectorAll('[data-dacc]').forEach(function (b) { b.onclick = async function () { if (!confirm('Delete this login permanently?')) return; try { must(await db.rpc('admin_delete_account', { p_user: b.getAttribute('data-dacc') })); toast('Deleted'); viewAccounts(el); } catch (e) { toast(errText(e), true); } }; });
     el.querySelectorAll('[data-rp]').forEach(function (b) {
       b.onclick = function () {
         var uid = b.getAttribute('data-rp');
@@ -954,6 +977,10 @@
     lk.classes.forEach(function (c) { lk.cls[c.id] = c; });
     lk.sections.forEach(function (c) { lk.sec[c.id] = c; });
     lk.subjects.forEach(function (c) { lk.sub[c.id] = c; });
+    if (state.profile && state.profile.role === 'teacher') {   // teachers only see the classes they are assigned to
+      var asg = must(await db.from('teacher_assignments').select('class_id')), okc = {}; asg.forEach(function (a) { okc[a.class_id] = 1; });
+      lk.classes = lk.classes.filter(function (c) { return okc[c.id]; }); lk.sections = lk.sections.filter(function (c) { return okc[c.class_id]; });
+    }
     return lk;
   }
   function nm(row) { return row ? ((state.lang === 'ne' && row.name_ne) ? row.name_ne : row.name) : ''; }
