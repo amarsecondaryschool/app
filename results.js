@@ -92,7 +92,7 @@
       try {
         var D = await load(ex, $('#rc', el).value);
         if (!D.items.length) { box.innerHTML = '<div class="empty">No students in this class.</div>'; return; }
-        box.innerHTML = '<div class="row" style="margin:10px 0"><button class="btn primary" id="rp">🖨 Print grade sheets</button><button class="btn" id="rl">⬇ Download ledger</button></div>' +
+        box.innerHTML = '<div class="row" style="margin:10px 0"><button class="btn primary" id="rp">Print grade sheets</button><button class="btn" id="rl">Download ledger</button></div>' +
           '<div class="muted sm">' + (D.rule.verified === false ? 'Grading table not verified – check Grading rules. ' : '') + (mid ? 'Mid-term: one grade per subject, half credit hours.' : 'Terminal: theory + internal marks, weighted by credit hours.') + '</div>' +
           D.items.map(function (it) { var r = it.res; return '<div class="card row between"><div><b>' + esc(it.s.full_name) + '</b><div class="muted sm">' + (r.complete ? r.percentage + '% · GPA ' + f2(r.gpa) : 'Marks missing in ' + r.missing_count + ' subject(s)') + '</div></div><span class="chip ' + (r.result === 'PASS' ? 'ok' : 'bad') + '">' + (it.rank ? '#' + it.rank + ' ' : '') + r.result + '</span></div>'; }).join('');
         $('#rp', box).onclick = function () { var w = window.open('', '_blank'); if (!w) return toast('Allow pop-ups to print', true); w.document.write('<html><head><title>Grade sheets</title><style>' + CSS + '</style></head><body>' + D.items.map(function (it) { return sheetHtml(D, ex, mid, it); }).join('') + '</body></html>'); w.document.close(); setTimeout(function () { w.print(); }, 400); };
