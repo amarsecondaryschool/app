@@ -25,7 +25,7 @@
   };
   function hasMarks(m) { return m && (m.is_absent || m.theory != null || m.practical != null || m.internal != null) && !(m.theory === '' && m.internal === ''); }
   G.studentResult = function (rule, ess, mbs) {   // same maths as grading.js, but uses the weighted subject rule; optional subjects the student does not study are skipped
-    var opt = window.AMAR_OPT, list = ess.filter(function (es) { return !(opt[es.class_id + '|' + es.subject_id] && !hasMarks(mbs[es.subject_id])); });
+    var opt = window.AMAR_OPT, list = ess.filter(function (es) { return !(opt[es.class_id + '|' + es.subject_id] && !es.chosen && !hasMarks(mbs[es.subject_id])); });
     var subs = list.map(function (es) { return G.subjectResult(rule, es, mbs[es.subject_id]); }), full = 0, obt = 0, cr = 0, gs = 0, ng = 0, miss = 0;
     subs.forEach(function (s) { if (s.missing) { miss++; return; } full += s.full; obt += s.obtained; cr += s.credit; gs += s.gp * s.credit; if (!s.pass) ng++; });
     var pct = full > 0 ? G.round(obt / full * 100, 2) : 0, gpa = cr > 0 ? G.round(gs / cr, Number(rule.rounding) || 2) : 0, complete = miss === 0 && subs.length > 0;
@@ -44,6 +44,7 @@
     var a = document.createElement('a'); a.href = URL.createObjectURL(new Blob(['\ufeff' + t], { type: 'text/csv;charset=utf-8' })); a.download = name; document.body.appendChild(a); a.click(); a.remove();
   }
   async function load(exam, cid) {
+    await refreshOpt();
     var lk = await A.lookups(true), cls = lk.classes.filter(function (c) { return c.id === cid; })[0], sch = await A.school(), sn = {};
     lk.subjects.forEach(function (s) { sn[s.id] = s; });
     var ess = must(await db.from('exam_subjects').select('*').eq('exam_id', exam.id).eq('class_id', cid));
@@ -53,7 +54,11 @@
     var rules = []; try { rules = must(await db.from('grading_rules').select('*')); } catch (e) {}
     var rule = G.pickRule(rules, cls.level, exam.academic_year);
     ess.sort(function (a, b) { var oa = window.AMAR_OPT[cid + '|' + a.subject_id] || 0, ob = window.AMAR_OPT[cid + '|' + b.subject_id] || 0; return oa - ob || (sn[a.subject_id].name < sn[b.subject_id].name ? -1 : 1); });
-    var items = studs.map(function (s) { return { s: s, res: G.studentResult(rule, ess, mb[s.id] || {}) }; });
+    var chosen = {}, any = {};
+    try { if (studs.length) must(await db.from('student_optionals').select('student_id,subject_id').in('student_id', studs.map(function (s) { return s.id; }))).forEach(function (r) { chosen[r.student_id + '|' + r.subject_id] = 1; any[r.student_id] = 1; }); } catch (e) {}
+    var items = studs.map(function (s) {
+      var list = any[s.id] ? ess.filter(function (es) { return !window.AMAR_OPT[cid + '|' + es.subject_id] || chosen[s.id + '|' + es.subject_id]; }).map(function (es) { return window.AMAR_OPT[cid + '|' + es.subject_id] ? Object.assign({}, es, { chosen: true }) : es; }) : ess;
+      return { s: s, res: G.studentResult(rule, list, mb[s.id] || {}) }; });
     G.rankAll(items);
     return { cls: cls, sch: sch, sn: sn, ess: ess, items: items, rule: rule };
   }
@@ -76,7 +81,7 @@
       '<table class="m">' + head + rows + foot + '</table><div class="bt"><ol><li>One Credit Hour Equals 32 Clock Hours.</li><li>TH = Theory, IN = Internal (CAS), Ab* = Absent.</li><li>GPA = (Σ[Credit Hour × Grade Point]) / Total Credit Hour</li></ol>' +
       '<table class="g"><tr><th>Intervals in %</th><th>Grade</th><th>Detail</th><th>G.P.</th></tr>' + gr + '</table></div><div class="sg"><span>Class Teacher</span><span>Principal</span></div></section>';
   }
-  var CSS = '@page{size:A4 landscape;margin:6mm}*{box-sizing:border-box}body{font-family:"Times New Roman",serif;margin:0}.pg{page-break-after:always;border:2px solid #000;padding:8px 14px;height:196mm;display:flex;flex-direction:column;overflow:hidden}.c{text-align:center;position:relative}.lg{position:absolute;left:4px;top:0;width:82px;height:82px}.c h1{margin:2px 0;font-size:30px;letter-spacing:1px}.c h2{margin:2px 0;font-size:19px}.c h3{margin:2px 0 4px;font-size:17px}.who{display:flex;justify-content:space-between;border-top:2px solid #000;padding:5px 0;font-size:16px}table{border-collapse:collapse;width:100%}.m th,.m td{border:1.5px solid #000;text-align:center;padding:3px;font-size:15px}.m td.l{text-align:left;font-weight:bold;padding-left:8px}.dense .m th,.dense .m td{font-size:12px;padding:1px 3px}.bt{display:flex;justify-content:space-between;align-items:flex-end;font-size:12px;margin-top:auto}.bt ol{padding-left:16px;margin:0}.g{width:46%}.g th,.g td{border:1px solid #000;font-size:11px;text-align:center;padding:1px 4px}.sg{display:flex;justify-content:space-between;margin-top:22px;font-weight:bold;padding:0 40px}';
+  var CSS = '@page{size:A4 portrait;margin:6mm}*{box-sizing:border-box}body{font-family:"Times New Roman",serif;margin:0}.pg{border:1.5px solid #000;padding:6px 10px;height:137mm;margin-bottom:4mm;display:flex;flex-direction:column;overflow:hidden;break-inside:avoid}.pg:nth-of-type(2n){break-after:page;margin-bottom:0}.c{text-align:center;position:relative}.lg{position:absolute;left:2px;top:0;width:54px;height:54px}.c i{font-size:9px}.c h1{margin:0;font-size:20px;letter-spacing:.5px}.c b{font-size:10px}.c h2{margin:1px 0;font-size:12.5px}.c h3{margin:1px 0 3px;font-size:12px}.who{display:flex;justify-content:space-between;border-top:1.5px solid #000;padding:3px 0;font-size:12px}table{border-collapse:collapse;width:100%}.m th,.m td{border:1px solid #000;text-align:center;padding:2px;font-size:11px}.m td.l{text-align:left;font-weight:bold;padding-left:6px}.dense .m th,.dense .m td{font-size:9.5px;padding:0 3px}.bt{display:flex;justify-content:space-between;align-items:flex-end;font-size:8px;margin-top:auto}.bt ol{padding-left:12px;margin:0}.g{width:44%}.g th,.g td{border:1px solid #000;font-size:7.5px;text-align:center;padding:0 3px}.sg{display:flex;justify-content:space-between;margin-top:14px;font-weight:bold;font-size:11px;padding:0 30px}';
   V.resultsLedger = async function (el) {
     A.skeleton(el);
     var lk = await A.lookups(true), exams = must(await db.from('exams').select('id,name,exam_type,academic_year').order('created_at'));
