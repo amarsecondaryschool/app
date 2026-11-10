@@ -57,9 +57,9 @@
       var cid = $('#cs', el).value, cs = await loadCS(), mine = {}; cs.filter(function (r) { return r.class_id === cid; }).forEach(function (r) { mine[r.subject_id] = r.is_compulsory ? 'c' : (r.opt_slot === 2 ? 'o2' : 'o1'); });
       var subs = lk.subjects.slice().sort(function (a, b) { return (mine[b.id] ? 1 : 0) - (mine[a.id] ? 1 : 0) || (mine[a.id] === 'c' ? -1 : 0) - (mine[b.id] === 'c' ? -1 : 0); });
       $('#cl', el).innerHTML = subs.map(function (s) { var v = mine[s.id] || 'n';
-        return '<div class="card row between"><b>' + esc(A.nm(s)) + '</b><select data-s="' + s.id + '" class="mini-sel"><option value="c"' + (v === 'c' ? ' selected' : '') + '>Compulsory</option><option value="o1"' + (v === 'o1' ? ' selected' : '') + '>Optional I</option><option value="o2"' + (v === 'o2' ? ' selected' : '') + '>Optional II</option><option value="n"' + (v === 'n' ? ' selected' : '') + '>Not taught</option></select></div>'; }).join('') +
+        return '<div class="card row between"><b>' + esc(A.nm(s)) + '</b><select data-s="' + s.id + '" class="mini-sel"><option value="c"' + (v === 'c' ? ' selected' : '') + '>Compulsory</option><option value="o1"' + (v === 'o1' ? ' selected' : '') + '>Optional I</option><option value="o2"' + (v === 'o2' ? ' selected' : '') + '>Optional II</option><option value="n"' + (v === 'n' ? ' selected' : '') + '>Not taught</option></select><button class="btn small danger" data-ds="' + s.id + '" style="margin-left:6px">🗑</button></div>'; }).join('') +
         '<div class="row mt"><input id="ns" class="search" placeholder="New subject name"><button class="btn small" id="nsb">＋ Add</button></div>' +
-        '<button class="btn mt" id="rs">↺ Reset this class to Nepal defaults</button>';
+        '<button class="btn primary mt" id="cpy" style="width:100%">⧉ Copy this setup to ALL other classes</button><button class="btn mt" id="rs" style="width:100%">↺ Reset this class to Nepal defaults</button>';
       el.querySelectorAll('[data-s]').forEach(function (sel) { sel.onchange = async function () {
         try { var sid = sel.getAttribute('data-s');
           if (sel.value === 'n') must(await db.from('class_subjects').delete().eq('class_id', cid).eq('subject_id', sid));
@@ -67,6 +67,13 @@
           toast('✓ ' + 'Saved'); } catch (e) { toast(A.errText(e), true); } }; });
       $('#nsb', el).onclick = async function () { var n = $('#ns', el).value.trim(); if (!n) return;
         try { var sch = await A.school(); must(await db.from('subjects').upsert({ school_id: sch.id, name: n }, { onConflict: 'school_id,name' })); lk = await A.lookups(true); draw(); } catch (e) { toast(A.errText(e), true); } };
+      el.querySelectorAll('[data-ds]').forEach(function (b) { b.onclick = async function () { if (!confirm('Delete this subject from the whole school?')) return;
+        try { must(await db.from('subjects').delete().eq('id', b.getAttribute('data-ds'))); lk = await A.lookups(true); draw(); } catch (e) { toast(A.errText(e), true); } }; });
+      $('#cpy', el).onclick = async function () { if (!confirm('Copy Compulsory / Optional I / Optional II of this class to ALL other classes?')) return;
+        try { var rows = (await loadCS()).filter(function (r) { return r.class_id === cid; }), others = lk.classes.filter(function (c) { return c.id !== cid; });
+          must(await db.from('class_subjects').delete().in('class_id', others.map(function (c) { return c.id; }))); var out = [];
+          others.forEach(function (c) { rows.forEach(function (r) { out.push({ class_id: c.id, subject_id: r.subject_id, is_compulsory: r.is_compulsory, opt_slot: r.opt_slot }); }); });
+          must(await db.from('class_subjects').insert(out)); toast('✓ Copied to ' + others.length + ' classes'); } catch (e) { toast(A.errText(e), true); } };
       $('#rs', el).onclick = async function () { if (!confirm('Reset subjects of this class to the Nepal defaults?')) return;
         try { await ensureDefaults(cid, true); draw(); } catch (e) { toast(A.errText(e), true); } };
     }
@@ -103,7 +110,8 @@
     try { var cs0 = must(await db.from('class_subjects').select('class_id,subject_id,opt_slot').eq('is_compulsory', false).is('opt_slot', null)); if (cs0.length) { var l0 = await A.lookups(), nm0 = {}, lv0 = {}; l0.subjects.forEach(function (x) { nm0[x.id] = x.name; }); l0.classes.forEach(function (x) { lv0[x.id] = x.level; }); must(await db.from('class_subjects').upsert(cs0.map(function (r) { return { class_id: r.class_id, subject_id: r.subject_id, is_compulsory: false, opt_slot: slotOf(nm0[r.subject_id], lv0[r.class_id]) }; }), { onConflict: 'class_id,subject_id' })); } } catch (e3) {}
   }
 
-  /* ----- Marks entry screen: compulsory subjects + Optional I / Optional II ----- */
+  /* ----- Marks entry: just Exam, Class, Subject (compulsory subjects + Optional I + Optional II) ----- */
+  var PRI = ['English', 'Nepali', 'Mathematics', 'Science and Technology', 'Social Studies'];
   V.marksEntry = async function (el) {
     A.skeleton(el);
     try { await prepare(); } catch (e) { toast(A.errText(e), true); }
@@ -113,67 +121,57 @@
     var mine = admin ? null : must(await db.from('teacher_assignments').select('class_id,subject_id'));
     var classes = lk.classes.filter(function (c) { return admin || mine.some(function (a) { return a.class_id === c.id; }); }).sort(function (a, b) { return a.level - b.level; });
     if (!exams.length || !classes.length) { el.innerHTML = '<div class="empty">No exam or class available yet.</div>'; return; }
-    el.innerHTML = '<div class="note"><b>1</b> Choose exam &amp; class &nbsp;·&nbsp; <b>2</b> Tap a subject &nbsp;·&nbsp; <b>3</b> Type marks and press Save</div>' +
-      '<div class="row"><select id="mx" class="search">' + exams.map(function (e) { return '<option value="' + e.id + '">' + esc(e.name) + '</option>'; }).join('') + '</select><select id="mc" class="search">' + classes.map(function (c) { return '<option value="' + c.id + '">' + esc(A.nm(c)) + '</option>'; }).join('') + '</select></div><div id="mb"></div>';
+    function opts(a, f) { return a.map(f).join(''); }
+    el.innerHTML = '<div class="pick"><label>Exam</label><select id="mx">' + opts(exams, function (e) { return '<option value="' + e.id + '">' + esc(e.name) + '</option>'; }) + '</select>' +
+      '<label>Class</label><select id="mc">' + opts(classes, function (c) { return '<option value="' + c.id + '">' + esc(A.nm(c)) + '</option>'; }) + '</select>' +
+      '<label>Subject</label><select id="ms"></select></div><div id="mb"></div>';
     var box = $('#mb', el);
-    async function home() {
-      var ex = exams.filter(function (e) { return e.id === $('#mx', el).value; })[0], cid = $('#mc', el).value;
-      var cs = (await loadCS()).filter(function (r) { return r.class_id === cid; }), allow = null;
-      if (!admin) { var m = mine.filter(function (a) { return a.class_id === cid; }); if (!m.some(function (a) { return !a.subject_id; })) { allow = {}; m.forEach(function (a) { allow[a.subject_id] = 1; }); } }
-      function ok(r) { return !allow || allow[r.subject_id]; }
-      var comp = cs.filter(function (r) { return r.is_compulsory && ok(r); }), o = { 1: [], 2: [] };
-      cs.filter(function (r) { return !r.is_compulsory && ok(r); }).forEach(function (r) { o[r.opt_slot === 2 ? 2 : 1].push(r); });
-      var hint = [''];
-      box.innerHTML = '<h4 class="sec">Compulsory subjects (' + comp.length + ')</h4><div class="subgrid">' + comp.map(function (r) { return '<button class="subbtn" data-s="' + r.subject_id + '"><span>' + esc(A.nm(sub[r.subject_id])) + '</span></button>'; }).join('') + '</div>' +
-        '<h4 class="sec">Optional subjects</h4><div class="subgrid">' + [1, 2].filter(function (n) { return o[n].length; }).map(function (n) { return '<button class="subbtn opt" data-o="' + n + '"><span>Optional ' + (n === 1 ? 'I' : 'II') + '</span><small>' + o[n].length + ' choice(s)</small></button>'; }).join('') + '</div>' +
-        (admin ? '<button class="btn" id="asg" style="margin-top:14px">👥 Choose each student’s Optional I / II subject</button>' : '');
-      box.querySelectorAll('[data-s]').forEach(function (b) { b.onclick = function () { sheet(ex, cid, b.getAttribute('data-s'), null); }; });
-      box.querySelectorAll('[data-o]').forEach(function (b) { b.onclick = function () { pick(ex, cid, +b.getAttribute('data-o'), o[+b.getAttribute('data-o')]); }; });
-      if ($('#asg', box)) $('#asg', box).onclick = function () { assign(cid, o); };
+    function cur() { return { ex: exams.filter(function (e) { return e.id === $('#mx', el).value; })[0], cid: $('#mc', el).value, v: $('#ms', el).value }; }
+    async function allowed(cid) { if (admin) return null; var m = mine.filter(function (a) { return a.class_id === cid; }); if (m.some(function (a) { return !a.subject_id; })) return null; var o = {}; m.forEach(function (a) { o[a.subject_id] = 1; }); return o; }
+    async function fillSubjects() {
+      var cid = $('#mc', el).value, cs = (await loadCS()).filter(function (r) { return r.class_id === cid; }), al = await allowed(cid);
+      function ok(r) { return !al || al[r.subject_id]; }
+      var comp = cs.filter(function (r) { return r.is_compulsory && ok(r); }).sort(function (a, b) { var x = PRI.indexOf(sub[a.subject_id].name), y = PRI.indexOf(sub[b.subject_id].name); return (x < 0 ? 99 : x) - (y < 0 ? 99 : y) || (sub[a.subject_id].name < sub[b.subject_id].name ? -1 : 1); });
+      var o1 = cs.filter(function (r) { return !r.is_compulsory && (r.opt_slot === 2 ? 2 : 1) === 1 && ok(r); }).length, o2 = cs.filter(function (r) { return !r.is_compulsory && r.opt_slot === 2 && ok(r); }).length;
+      $('#ms', el).innerHTML = opts(comp, function (r) { return '<option value="' + r.subject_id + '">' + esc(A.nm(sub[r.subject_id])) + '</option>'; }) + (o1 ? '<option value="o1">Optional I</option>' : '') + (o2 ? '<option value="o2">Optional II</option>' : '');
+      sheet();
     }
     async function students(cid) { return must(await db.from('students').select('id,full_name,roll_no').eq('class_id', cid).eq('status', 'active').order('roll_no').order('full_name')); }
-    async function pick(ex, cid, slot, opts) {
-      var st = await students(cid), so = st.length ? must(await db.from('student_optionals').select('student_id,slot,subject_id').eq('slot', slot).in('student_id', st.map(function (x) { return x.id; }))) : [], cnt = {};
-      so.forEach(function (r) { cnt[r.subject_id] = (cnt[r.subject_id] || 0) + 1; });
-      box.innerHTML = '<button class="btn small" id="bk">← Back</button><h4 class="sec">Optional ' + (slot === 1 ? 'I' : 'II') + ' – choose the subject</h4><div class="subgrid">' + opts.map(function (r) { return '<button class="subbtn opt" data-s="' + r.subject_id + '"><span>' + esc(A.nm(sub[r.subject_id])) + '</span><small>' + (cnt[r.subject_id] || 0) + ' students</small></button>'; }).join('') + '</div>';
-      $('#bk', box).onclick = home; box.querySelectorAll('[data-s]').forEach(function (b) { b.onclick = function () { sheet(ex, cid, b.getAttribute('data-s'), slot); }; });
+    async function sheet() {
+      var c = cur(), ex = c.ex, cid = c.cid, v = c.v; if (!v) { box.innerHTML = '<div class="empty">No subjects set for this class. Open Subjects and set them first.</div>'; return; }
+      box.innerHTML = '<div class="empty">Loading…</div>';
+      try {
+        var isOpt = v === 'o1' || v === 'o2', slot = v === 'o1' ? 1 : 2, st = await students(cid), cs = (await loadCS()).filter(function (r) { return r.class_id === cid; }), al = await allowed(cid);
+        var ids = isOpt ? cs.filter(function (r) { return !r.is_compulsory && (r.opt_slot === 2 ? 2 : 1) === slot && (!al || al[r.subject_id]); }).map(function (r) { return r.subject_id; }) : [v];
+        var ess = must(await db.from('exam_subjects').select('*').eq('exam_id', ex.id).eq('class_id', cid).in('subject_id', ids));
+        if (!ess.length) { must(await db.from('exam_subjects').insert(ids.map(function (i) { return { exam_id: ex.id, class_id: cid, subject_id: i, theory_marks: 100, practical_marks: 0, internal_marks: 0, pass_marks: 0, credit_hours: 4 }; }))); ess = must(await db.from('exam_subjects').select('*').eq('exam_id', ex.id).eq('class_id', cid).in('subject_id', ids)); }
+        var es0 = ess[0], sid = st.map(function (x) { return x.id; }), so = {}, mk = {};
+        if (isOpt && sid.length) must(await db.from('student_optionals').select('student_id,subject_id').eq('slot', slot).in('student_id', sid)).forEach(function (r) { so[r.student_id] = r.subject_id; });
+        if (sid.length) must(await db.from('marks').select('*').eq('exam_id', ex.id).in('subject_id', ids).in('student_id', sid)).forEach(function (r) { mk[r.student_id] = r; });
+        var P = [['theory', 'TH', +es0.theory_marks], ['practical', 'PR', +es0.practical_marks], ['internal', 'IN', +es0.internal_marks]].filter(function (p) { return p[2] > 0; }), full = P.reduce(function (a, p) { return a + p[2]; }, 0);
+        var title = isOpt ? 'Optional ' + (slot === 1 ? 'I' : 'II') : A.nm(sub[v]);
+        box.innerHTML = '<div class="card"><h3 style="margin:0">' + esc(title) + '</h3><div class="muted sm">' + P.map(function (p) { return p[1] + ' ' + p[2]; }).join(' + ') + ' = <b>' + full + '</b> marks &nbsp;·&nbsp; <b>' + es0.credit_hours + '</b> credit hours</div>' +
+          (admin ? '<details style="margin-top:8px"><summary>⚙ Change full marks / credit hours</summary><div class="row" style="margin-top:8px"><input id="eth" type="number" class="search" placeholder="Theory" value="' + es0.theory_marks + '"><input id="ein" type="number" class="search" placeholder="Internal" value="' + es0.internal_marks + '"><input id="ech" type="number" step="0.25" class="search" placeholder="Credit hours" value="' + es0.credit_hours + '"><button class="btn small" id="esv">Update</button></div></details>' : '') + '</div>' +
+          (st.length ? st.map(function (s) { var m = mk[s.id] || {};
+            return '<div class="mk" data-id="' + s.id + '"><div class="nm"><h4>' + (s.roll_no ? s.roll_no + '. ' : '') + esc(s.full_name) + '</h4>' +
+              (isOpt ? '<select class="mini-sel" data-so="' + s.id + '"><option value="">— choose subject —</option>' + opts(ids, function (i) { return '<option value="' + i + '"' + (so[s.id] === i ? ' selected' : '') + '>' + esc(A.nm(sub[i])) + '</option>'; }) + '</select>' : '') +
+              '</div><div class="in">' + opts(P, function (p) { return '<input type="number" inputmode="decimal" step="0.25" min="0" max="' + p[2] + '" data-k="' + p[0] + '" placeholder="' + p[1] + '/' + p[2] + '" value="' + (m[p[0]] == null ? '' : m[p[0]]) + '">'; }) + '<label class="ab"><input type="checkbox" data-ab' + (m.is_absent ? ' checked' : '') + '> Ab</label></div></div>'; }).join('') + '<button class="btn primary" id="sv" style="margin-top:12px;width:100%">💾 Save marks</button>' : '<div class="empty">No students in this class.</div>');
+        box.querySelectorAll('select[data-so]').forEach(function (x) { x.onchange = async function () { try { var s = x.getAttribute('data-so'); if (!x.value) must(await db.from('student_optionals').delete().eq('student_id', s).eq('slot', slot)); else must(await db.from('student_optionals').upsert({ student_id: s, slot: slot, subject_id: x.value }, { onConflict: 'student_id,slot' })); toast('✓ Subject saved'); } catch (e) { toast(A.errText(e), true); } }; });
+        if ($('#esv', box)) $('#esv', box).onclick = async function () { try { must(await db.from('exam_subjects').update({ theory_marks: +$('#eth', box).value || 0, internal_marks: +$('#ein', box).value || 0, credit_hours: +$('#ech', box).value || 0 }).in('id', ess.map(function (e) { return e.id; }))); toast('✓ Updated'); sheet(); } catch (e) { toast(A.errText(e), true); } };
+        if ($('#sv', box)) $('#sv', box).onclick = async function () {
+          var rows = [], bad = 0, dels = [];
+          box.querySelectorAll('.mk').forEach(function (r) { r.classList.remove('bad'); var stid = r.getAttribute('data-id'), ab = r.querySelector('[data-ab]').checked, subj = v, any = ab, row = { exam_id: ex.id, student_id: stid, is_absent: ab };
+            if (isOpt) subj = r.querySelector('[data-so]').value;
+            P.forEach(function (p) { var x = r.querySelector('[data-k="' + p[0] + '"]').value; if (x !== '') { any = true; if (+x < 0 || +x > p[2]) { bad++; r.classList.add('bad'); } row[p[0]] = +x; } else row[p[0]] = null; });
+            if (!any) return; if (!subj) { bad++; r.classList.add('bad'); return; }
+            row.subject_id = subj; rows.push(row); if (mk[stid] && mk[stid].subject_id !== subj) dels.push(stid); });
+          if (bad) return toast('Check the red rows: marks above full marks, or optional subject not chosen', true);
+          if (!rows.length) return toast('Type some marks first', true);
+          try { for (var i = 0; i < dels.length; i++) await db.from('marks').delete().eq('exam_id', ex.id).eq('student_id', dels[i]).in('subject_id', ids);
+            for (var j = 0; j < rows.length; j += 100) must(await db.from('marks').upsert(rows.slice(j, j + 100), { onConflict: 'exam_id,student_id,subject_id' })); toast('✓ Saved ' + rows.length + ' students'); sheet(); } catch (e) { toast(A.errText(e), true); }
+        };
+      } catch (e) { box.innerHTML = '<p class="err">' + esc(A.errText(e)) + '</p>'; }
     }
-    async function assign(cid, o) {
-      var st = await students(cid), so = st.length ? must(await db.from('student_optionals').select('student_id,slot,subject_id').in('student_id', st.map(function (x) { return x.id; }))) : [], cur = {};
-      so.forEach(function (r) { cur[r.student_id + '|' + r.slot] = r.subject_id; });
-      function sel(n, sid) { return '<select class="mini-sel" data-st="' + sid + '" data-sl="' + n + '"><option value="">Optional ' + (n === 1 ? 'I' : 'II') + ': —</option>' + o[n].map(function (r) { return '<option value="' + r.subject_id + '"' + (cur[sid + '|' + n] === r.subject_id ? ' selected' : '') + '>' + esc(A.nm(sub[r.subject_id])) + '</option>'; }).join('') + '</select>'; }
-      box.innerHTML = '<button class="btn small" id="bk">← Back</button><div class="note">Choose the Optional I and Optional II subject of every student. It saves automatically.</div>' + st.map(function (s) { return '<div class="card"><b>' + (s.roll_no ? s.roll_no + '. ' : '') + esc(s.full_name) + '</b><div class="row" style="margin-top:8px">' + sel(1, s.id) + sel(2, s.id) + '</div></div>'; }).join('');
-      $('#bk', box).onclick = home;
-      box.querySelectorAll('select[data-st]').forEach(function (x) { x.onchange = async function () {
-        try { var q = db.from('student_optionals'), sid = x.getAttribute('data-st'), sl = +x.getAttribute('data-sl');
-          if (!x.value) must(await q.delete().eq('student_id', sid).eq('slot', sl)); else must(await q.upsert({ student_id: sid, slot: sl, subject_id: x.value }, { onConflict: 'student_id,slot' })); toast('✓ Saved'); } catch (e) { toast(A.errText(e), true); } }; });
-    }
-    async function sheet(ex, cid, sid, slot) {
-      var st = await students(cid);
-      if (slot) { var so = st.length ? must(await db.from('student_optionals').select('student_id').eq('slot', slot).eq('subject_id', sid).in('student_id', st.map(function (x) { return x.id; }))) : [], got = {}; so.forEach(function (r) { got[r.student_id] = 1; }); st = st.filter(function (x) { return got[x.id]; }); }
-      var es = must(await db.from('exam_subjects').select('*').eq('exam_id', ex.id).eq('class_id', cid).eq('subject_id', sid))[0];
-      if (!es) { must(await db.from('exam_subjects').insert({ exam_id: ex.id, class_id: cid, subject_id: sid, theory_marks: 100, practical_marks: 0, internal_marks: 0, pass_marks: 0, credit_hours: 4 })); es = must(await db.from('exam_subjects').select('*').eq('exam_id', ex.id).eq('class_id', cid).eq('subject_id', sid))[0]; }
-      var mk = {}; if (st.length) must(await db.from('marks').select('*').eq('exam_id', ex.id).eq('subject_id', sid).in('student_id', st.map(function (x) { return x.id; }))).forEach(function (r) { mk[r.student_id] = r; });
-      var P = [['theory', 'TH', +es.theory_marks], ['practical', 'PR', +es.practical_marks], ['internal', 'IN', +es.internal_marks]].filter(function (p) { return p[2] > 0; });
-      var full = P.reduce(function (a, p) { return a + p[2]; }, 0);
-      box.innerHTML = '<button class="btn small" id="bk">← Back</button><div class="card"><h3 style="margin:0">' + esc(A.nm(sub[sid])) + (slot ? ' <span class="chip">Optional ' + (slot === 1 ? 'I' : 'II') + '</span>' : '') + '</h3><div class="muted sm">' + P.map(function (p) { return p[1] + ' ' + p[2]; }).join(' + ') + ' = ' + full + ' marks &nbsp;·&nbsp; ' + es.credit_hours + ' credit hours</div>' +
-        (admin ? '<details style="margin-top:8px"><summary>⚙ Change full marks / credit hours</summary><div class="row" style="margin-top:8px"><input id="eth" type="number" class="search" placeholder="Theory" value="' + es.theory_marks + '"><input id="ein" type="number" class="search" placeholder="Internal" value="' + es.internal_marks + '"><input id="ech" type="number" step="0.25" class="search" placeholder="Credit hours" value="' + es.credit_hours + '"><button class="btn small" id="esv">Update</button></div></details>' : '') + '</div>' +
-        (st.length ? st.map(function (s) { var m = mk[s.id] || {};
-          return '<div class="mk" data-id="' + s.id + '"><div class="nm"><h4>' + (s.roll_no ? s.roll_no + '. ' : '') + esc(s.full_name) + '</h4></div><div class="in">' + P.map(function (p) { return '<input type="number" inputmode="decimal" step="0.25" min="0" max="' + p[2] + '" data-k="' + p[0] + '" placeholder="' + p[1] + '/' + p[2] + '" value="' + (m[p[0]] == null ? '' : m[p[0]]) + '">'; }).join('') + '<label class="ab"><input type="checkbox" data-ab' + (m.is_absent ? ' checked' : '') + '> Ab</label></div></div>'; }).join('') + '<button class="btn primary" id="sv" style="margin-top:12px;width:100%">💾 Save marks</button>'
-          : '<div class="empty">' + (slot ? 'No student has this optional subject yet. Go back and use “Choose each student’s Optional I / II subject”.' : 'No students in this class.') + '</div>');
-      $('#bk', box).onclick = function () { slot ? pick(ex, cid, slot, null) : home(); };
-      if (slot) $('#bk', box).onclick = home;
-      if ($('#esv', box)) $('#esv', box).onclick = async function () { try { must(await db.from('exam_subjects').update({ theory_marks: +$('#eth', box).value || 0, internal_marks: +$('#ein', box).value || 0, credit_hours: +$('#ech', box).value || 0 }).eq('id', es.id)); toast('✓ Updated'); sheet(ex, cid, sid, slot); } catch (e) { toast(A.errText(e), true); } };
-      if ($('#sv', box)) $('#sv', box).onclick = async function () {
-        var rows = [], bad = 0;
-        box.querySelectorAll('.mk').forEach(function (r) { r.classList.remove('bad'); var ab = r.querySelector('[data-ab]').checked, row = { exam_id: ex.id, student_id: r.getAttribute('data-id'), subject_id: sid, is_absent: ab }, any = ab;
-          P.forEach(function (p) { var v = r.querySelector('[data-k="' + p[0] + '"]').value; if (v !== '') { any = true; if (+v < 0 || +v > p[2]) { bad++; r.classList.add('bad'); } row[p[0]] = +v; } else row[p[0]] = null; });
-          if (any) rows.push(row); });
-        if (bad) return toast('Some marks are above the full marks', true);
-        if (!rows.length) return toast('Type some marks first', true);
-        try { for (var i = 0; i < rows.length; i += 100) must(await db.from('marks').upsert(rows.slice(i, i + 100), { onConflict: 'exam_id,student_id,subject_id' })); toast('✓ Saved ' + rows.length + ' students'); } catch (e) { toast(A.errText(e), true); }
-      };
-    }
-    $('#mx', el).onchange = home; $('#mc', el).onchange = home; home();
+    $('#mx', el).onchange = sheet; $('#ms', el).onchange = sheet; $('#mc', el).onchange = fillSubjects; fillSubjects();
   };
 })();
