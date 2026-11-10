@@ -262,3 +262,9 @@ h4.sec { margin:18px 4px 8px; font-size:15px; color:#365b7d; letter-spacing:.3px
 .subbtn.opt { background:linear-gradient(180deg,#fff8ec,#ffeccd); border-color:#f0d5a4; color:#7a4a05; box-shadow:0 3px 0 #e7c88c,0 8px 14px rgba(150,90,10,.10); }
 .mk { background:#fff; border:1px solid #e2eaf3; border-radius:14px; padding:8px 10px; margin:6px 0; box-shadow:0 2px 8px rgba(30,60,100,.06); }
 .mk .in input[type=number] { border:1.5px solid #b9cde2; text-align:center; font-weight:700; }
+.pick { background:#fff; border:1px solid #e2eaf3; border-radius:18px; padding:12px; box-shadow:0 6px 16px rgba(30,60,100,.08); margin-bottom:12px; }
+.pick label { display:block; font-size:12px; font-weight:700; color:#5d7893; letter-spacing:.5px; text-transform:uppercase; margin:8px 2px 4px; }
+.pick select { width:100%; font-size:17px; font-weight:600; padding:12px; margin:0; }
+.irow { display:flex; justify-content:space-between; gap:12px; padding:9px 2px; border-bottom:1px solid #edf2f8; font-size:15px; }
+.irow:last-child { border-bottom:0; } .irow span { color:#6b87a3; } .irow b { text-align:right; color:#1d3a56; } .irow a { color:#1c6fa8; text-decoration:none; }
+.mk .nm .mini-sel { margin-top:4px; width:100%; font-size:13px; }
