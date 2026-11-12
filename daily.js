@@ -21,6 +21,11 @@
     return must(await db.from('teachers').select('id, full_name, teacher_code').eq('user_id', state.profile.id).maybeSingle());
   }
   /* The (class, section) pairs this person may work with */
+  async function attChoices() {   // teachers: only the class they are class teacher of
+    var all = await classChoices();
+    if (state.profile.role !== 'teacher') return all;
+    try { var tr = await myTeacher(), ct = tr ? must(await db.from('classes').select('id').eq('class_teacher_id', tr.id)) : [], ok = {}; ct.forEach(function (c) { ok[c.id] = 1; }); return all.filter(function (c) { return ok[c.class_id]; }); } catch (e) { return all; }
+  }
   async function classChoices() {
     var lk = await A.lookups(), role = state.profile.role, res = [], seen = {};
     function add(cid, sid) {
@@ -118,7 +123,7 @@
   };
 
   async function attMark(box) {
-    var choices = await classChoices();
+    var choices = await attChoices();
     if (!choices.length) { box.innerHTML = A.emptyMsg('no_classes_assigned'); return; }
     var role = state.profile.role, tod = A.today(), selKey = ck(choices[0]), date = tod;
     box.innerHTML = '<div id="qbar"></div><div class="filters">' + choiceSelect('ac', choices, selKey) +
