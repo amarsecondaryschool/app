@@ -1,7 +1,7 @@
 // Service worker: lets the app install and open quickly.
 // Network first (so updates show up), cache as a fallback. Database calls go to another domain and are never cached.
 // IMPORTANT: files are cached one by one, so a missing file can never stop the app from installing.
-const CACHE = 'amar-school-v14';
+const CACHE = 'amar-school-v15';
 const FILES = ['./', './index.html', './styles.css', './app.js', './config.js', './strings.js', './strings2.js', './grading.js', './importer.js', './daily.js', './exams.js', './finance.js', './data.js', './simple.js', './results.js', './routine.js',
                './manifest.webmanifest', './amar-icon-192.png', './amar-icon-512.png', './logo.png'];
 
