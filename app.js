@@ -15,7 +15,7 @@
   var state = { lang: 'en', profile: null, stack: [], timeoutMin: 15, timer: null, child: null, children: [] };
   var signed = {};
   var installEvt = null;
-  STR.en.parent_id = 'Parent mobile number'; if (STR.ne) STR.ne.parent_id = 'अभिभावकको मोबाइल नम्बर'; STR.en.parent_phone = 'Parent mobile number (this is the login ID)'; STR.en.more = 'More'; STR.en.marksEntry = 'Marks'; STR.en.results = 'Results'; STR.en.home = STR.en.home || 'Home'; STR.en.grade_sheet = 'Results & Ledger'; STR.en.exams_manage = 'Exams (create / publish)'; STR.en.student_codes = "Child's Student ID (several children: separate with commas)"; STR.en.subject_mgmt = 'Subjects'; STR.en.user_accounts = 'Logins (ID & password)'; if (STR.ne) STR.ne.more = STR.ne.more || 'थप';
+  STR.en.parent_id = 'Parent mobile number'; if (STR.ne) STR.ne.parent_id = 'अभिभावकको मोबाइल नम्बर'; STR.en.parent_phone = 'Parent mobile number (this is the login ID)'; STR.en.more = 'More'; STR.en.class_routine = 'Class routine'; STR.en.timetable = 'Class routine'; STR.en.marksEntry = 'Marks'; STR.en.results = 'Results'; STR.en.home = STR.en.home || 'Home'; STR.en.grade_sheet = 'Results & Ledger'; STR.en.exams_manage = 'Exams (create / publish)'; STR.en.student_codes = "Child's Student ID (several children: separate with commas)"; STR.en.subject_mgmt = 'Subjects'; STR.en.user_accounts = 'Logins (ID & password)'; if (STR.ne) STR.ne.more = STR.ne.more || 'थप';
 
   try { state.lang = localStorage.getItem('amar_lang') || 'en'; } catch (e) {}
 
@@ -394,7 +394,7 @@
     { k: 'auto_reports', more: 1, i: '', g: 'a', name: 'reports' },
     { k: 'homework', i: '', g: 'a', name: 'homework' },
     { k: 'exam_routine', more: 1, i: '', g: 'a', name: 'examRoutine' },
-    { k: 'class_routine', more: 1, i: '', g: 'a', name: 'timetable' },
+    { k: 'class_routine', i: '', g: 'a', name: 'classRoutine' },
     { k: 'fees', i: '', g: 'o', name: 'fees' },
     { k: 'notices', i: '', g: 'o', name: 'notices' },
     { k: 'calendar', i: '', g: 'o', name: 'calendar' },
@@ -408,7 +408,7 @@
     { k: 'attendance', i: '', name: 'attendance' },
     { k: 'marks_entry', i: '', name: 'marksEntry' },
     { k: 'homework', i: '', name: 'homework' },
-    { k: 'class_routine', i: '', name: 'timetable' },
+    { k: 'class_routine', i: '', name: 'myRoutine' },
     { k: 'notices', i: '', name: 'notices' },
     { k: 'calendar', more: 1, i: '', name: 'calendar' },
     { k: 'staff_leave', more: 1, i: '', name: 'leave' }
@@ -421,7 +421,7 @@
     { k: 'exam_routine', i: '', name: 'examRoutine' },
     { k: 'account', i: '', name: 'fees' },
     { k: 'calendar', i: '', name: 'calendar' },
-    { k: 'timetable', i: '', name: 'timetable' },
+    { k: 'timetable', i: '', name: 'myRoutine' },
     { k: 'inbox', i: '', name: 'inbox' }
   ];
   var GROUPS = { p: ['grp_people', 'g-blue'], a: ['grp_academics', 'g-green'], o: ['grp_operations', 'g-orange'], d: ['grp_data', 'g-purple'], x: ['', 'g-blue'] };
