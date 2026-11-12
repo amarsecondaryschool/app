@@ -48,7 +48,7 @@
     var lk = await A.lookups(true), cls = lk.classes.filter(function (c) { return c.id === cid; })[0], sch = await A.school(), sn = {};
     lk.subjects.forEach(function (s) { sn[s.id] = s; });
     var ess = must(await db.from('exam_subjects').select('*').eq('exam_id', exam.id).eq('class_id', cid));
-    var studs = must(await db.from('students').select('id,student_code,full_name,roll_no,admission_no').eq('class_id', cid).eq('status', 'active').order('roll_no').order('full_name'));
+    var studs = must(await db.from('students').select('id,student_code,full_name,roll_no,admission_no,dob_bs,father_name,mother_name').eq('class_id', cid).eq('status', 'active').order('roll_no').order('full_name'));
     var marks = studs.length ? must(await db.from('marks').select('*').eq('exam_id', exam.id).in('student_id', studs.map(function (s) { return s.id; }))) : [];
     var mb = {}; marks.forEach(function (m) { (mb[m.student_id] = mb[m.student_id] || {})[m.subject_id] = m; });
     var rules = []; try { rules = must(await db.from('grading_rules').select('*')); } catch (e) {}
@@ -82,6 +82,21 @@
       '<table class="g"><tr><th>Intervals in %</th><th>Grade</th><th>Detail</th><th>G.P.</th></tr>' + gr + '</table></div><div class="sg"><span>Class Teacher</span><span>Principal</span></div></section>';
   }
   var CSS = '@page{size:A4 portrait;margin:6mm}*{box-sizing:border-box}body{font-family:"Times New Roman",serif;margin:0}.pg{border:1.5px solid #000;padding:6px 10px;height:137mm;margin-bottom:4mm;display:flex;flex-direction:column;overflow:hidden;break-inside:avoid}.pg:nth-of-type(2n){break-after:page;margin-bottom:0}.c{text-align:center;position:relative}.lg{position:absolute;left:2px;top:0;width:54px;height:54px}.c i{font-size:9px}.c h1{margin:0;font-size:20px;letter-spacing:.5px}.c b{font-size:10px}.c h2{margin:1px 0;font-size:12.5px}.c h3{margin:1px 0 3px;font-size:12px}.who{display:flex;justify-content:space-between;border-top:1.5px solid #000;padding:3px 0;font-size:12px}table{border-collapse:collapse;width:100%}.m th,.m td{border:1px solid #000;text-align:center;padding:2px;font-size:11px}.m td.l{text-align:left;font-weight:bold;padding-left:6px}.dense .m th,.dense .m td{font-size:9.5px;padding:0 3px}.bt{display:flex;justify-content:space-between;align-items:flex-end;font-size:8px;margin-top:auto}.bt ol{padding-left:12px;margin:0}.g{width:44%}.g th,.g td{border:1px solid #000;font-size:7.5px;text-align:center;padding:0 3px}.sg{display:flex;justify-content:space-between;margin-top:14px;font-weight:bold;font-size:11px;padding:0 30px}';
+  function ensureXlsx() { return new Promise(function (res, rej) { if (window.XLSX) return res(); var s = document.createElement('script'); s.src = 'https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js'; s.onload = res; s.onerror = function () { rej(new Error('Could not load the Excel library (internet needed)')); }; document.head.appendChild(s); }); }
+  /* Ledger in the same layout as Gradewise_Result_Report: Subjects row, then S N / Name / Dob / Father / Mother / Symbol and IN, TH, Total grade for every subject */
+  async function ledgerXlsx(D, ex) {
+    await ensureXlsx();
+    var subs = D.ess.filter(function (es) { return D.items.some(function (it) { return it.res.subjects.some(function (s) { return s.subject_id === es.subject_id && !s.missing; }); }); });
+    var h1 = ['Subjects', '', '', '', '', ''], h2 = ['S N', 'Student Name', 'Dob', 'Father Name', 'Mother Name', 'Symbol Number'], mg = [{ s: { r: 0, c: 0 }, e: { r: 0, c: 5 } }], wc = [{ wch: 6 }, { wch: 26 }, { wch: 12 }, { wch: 24 }, { wch: 22 }, { wch: 13 }];
+    subs.forEach(function (es, i) { var c = 6 + i * 3, n = D.sn[es.subject_id].name, o = window.AMAR_OPT[D.cls.id + '|' + es.subject_id]; h1.push((o ? (o === 2 ? 'Optional II ' : 'Optional I ') : '') + n, '', ''); h2.push('IN', 'TH', 'Total'); mg.push({ s: { r: 0, c: c }, e: { r: 0, c: c + 2 } }); wc.push({ wch: 6 }, { wch: 6 }, { wch: 7 }); });
+    h1.push('', '', ''); h2.push('GPA', 'Result', 'Rank'); wc.push({ wch: 7 }, { wch: 10 }, { wch: 6 });
+    var rows = D.items.map(function (it, i) { var r = [i + 1, it.s.full_name, it.s.dob_bs || '', it.s.father_name || '', it.s.mother_name || '', it.s.admission_no || it.s.roll_no || it.s.student_code.slice(-6)];
+      subs.forEach(function (es) { var s = it.res.subjects.filter(function (x) { return x.subject_id === es.subject_id; })[0]; if (!s || s.missing) { r.push('', '', ''); return; }
+        r.push(s.parts && s.parts['in'] ? s.parts['in'].grade : '', s.parts && s.parts.th ? s.parts.th.grade : '', s.absent ? 'Ab' : s.grade); });
+      return r.concat([it.res.complete ? f2(it.res.gpa) : '', it.res.result, it.rank || '']); });
+    var ws = XLSX.utils.aoa_to_sheet([h1, h2].concat(rows)); ws['!merges'] = mg; ws['!cols'] = wc;
+    var wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, 'Gradewise_Result_Report'); XLSX.writeFile(wb, D.cls.name + ' - ' + ex.name + ' - Ledger.xlsx');
+  }
   V.resultsLedger = async function (el) {
     A.skeleton(el);
     var lk = await A.lookups(true), exams = must(await db.from('exams').select('id,name,exam_type,academic_year').order('created_at'));
@@ -92,18 +107,11 @@
       try {
         var D = await load(ex, $('#rc', el).value);
         if (!D.items.length) { box.innerHTML = '<div class="empty">No students in this class.</div>'; return; }
-        box.innerHTML = '<div class="row" style="margin:10px 0"><button class="btn primary" id="rp">Print grade sheets</button><button class="btn" id="rl">Download ledger</button></div>' +
+        box.innerHTML = '<div class="row" style="margin:10px 0"><button class="btn primary" id="rp">Print grade sheets</button><button class="btn" id="rl">Download ledger (Excel)</button></div>' +
           '<div class="muted sm">' + (D.rule.verified === false ? 'Grading table not verified – check Grading rules. ' : '') + (mid ? 'Mid-term: one grade per subject, half credit hours.' : 'Terminal: theory + internal marks, weighted by credit hours.') + '</div>' +
           D.items.map(function (it) { var r = it.res; return '<div class="card row between"><div><b>' + esc(it.s.full_name) + '</b><div class="muted sm">' + (r.complete ? r.percentage + '% · GPA ' + f2(r.gpa) : 'Marks missing in ' + r.missing_count + ' subject(s)') + '</div></div><span class="chip ' + (r.result === 'PASS' ? 'ok' : 'bad') + '">' + (it.rank ? '#' + it.rank + ' ' : '') + r.result + '</span></div>'; }).join('');
         $('#rp', box).onclick = function () { var w = window.open('', '_blank'); if (!w) return toast('Allow pop-ups to print', true); w.document.write('<html><head><title>Grade sheets</title><style>' + CSS + '</style></head><body>' + D.items.map(function (it) { return sheetHtml(D, ex, mid, it); }).join('') + '</body></html>'); w.document.close(); setTimeout(function () { w.print(); }, 400); };
-        $('#rl', box).onclick = function () {
-          var h = ['S.N', 'Name', 'Symbol/Roll'], sub = D.ess.filter(function (e) { return D.items.some(function (i) { return i.res.subjects.some(function (s) { return s.subject_id === e.subject_id && !s.missing; }); }); });
-          sub.forEach(function (e) { var n = D.sn[e.subject_id].name; h.push(n + ' TH', n + ' IN', n + ' Grade', n + ' GP'); }); h.push('Total', '%', 'GPA', 'Result', 'Rank');
-          csv(D.cls.name + '-' + ex.name + '-ledger.csv', [[D.sch.name + ' – ' + ex.name + ' – ' + D.cls.name], h].concat(D.items.map(function (it, i) {
-            var row = [i + 1, it.s.full_name, it.s.roll_no || it.s.student_code]; sub.forEach(function (e) { var s = it.res.subjects.filter(function (x) { return x.subject_id === e.subject_id; })[0];
-              row.push(s && !s.missing ? (s.absent ? 'Ab' : s.theory) : '', s && !s.missing ? s.internal : '', s && !s.missing ? s.grade : '', s && !s.missing ? f2(s.gp) : ''); });
-            return row.concat([it.res.total_obtained + '/' + it.res.total_full, it.res.percentage, it.res.complete ? f2(it.res.gpa) : '', it.res.result, it.rank || '']); })));
-        };
+        $('#rl', box).onclick = async function () { try { await ledgerXlsx(D, ex); } catch (e) { toast(A.errText(e), true); } };
       } catch (e) { box.innerHTML = '<p class="err">' + esc(A.errText(e)) + '</p>'; }
     }
     $('#rx', el).onchange = draw; $('#rc', el).onchange = draw; draw();
