@@ -684,6 +684,10 @@
       $('#adds', el).onclick = function () { studentForm(null); };
       $('#prom', el).onclick = promoteView;
     }
+    if (!ro) { var da = document.createElement('button'); da.className = 'btn danger'; da.style.cssText = 'width:100%;margin-top:14px'; da.textContent = 'Delete ALL students';
+      da.onclick = async function () { if (prompt('This deletes ALL students and their records (marks, attendance, fees). Type DELETE to confirm.') !== 'DELETE') return;
+        try { must(await db.from('students').delete().not('id', 'is', null)); toast('All students deleted'); pop(); } catch (e) { toast(errText(e), true); } };
+      $('#exp', el).insertAdjacentElement('afterend', da); }
     $('#exp', el).onclick = function () {
       downloadCsv('students.csv', [['Student ID', 'Admission No', 'Name', 'Name (Nepali)', 'Class', 'Section', 'Roll', 'House', 'EMIS', 'Guardian', 'Guardian phone', 'Status']]
         .concat(filtered.map(function (r) { return [r.student_code, r.admission_no, r.full_name, r.full_name_ne, r.classes && r.classes.name, r.sections && r.sections.name, r.roll_no, r.house, r.emis_no, r.guardian_name, r.guardian_phone, r.status]; })));
@@ -791,11 +795,12 @@
       studs.forEach(function (s) {
         var p = String(s.guardian_phone || '').replace(/\D/g, '');
         if (!p) { none++; return; } if (p.length < 9 || p.length > 10) { bad++; return; }
-        var g = by[p] = by[p] || { phone: p, name: String(s.guardian_name || '').replace(/\s+/g, ' ').trim(), first: s.full_name, codes: [] }; g.codes.push(s.student_code);
+        var g = by[p] = by[p] || { phone: p, name: String(s.guardian_name || '').replace(/\s+/g, ' ').trim(), first: s.full_name, codes: [], names: {} }; g.codes.push(s.student_code); g.names[String(s.guardian_name || '').toLowerCase().replace(/\s+/g, ' ').trim() || 'unknown'] = 1;
       });
+      var shared = 0; Object.keys(by).forEach(function (p) { if (Object.keys(by[p].names).length > 1) { shared++; delete by[p]; } });   // a number used by different families is not safe for a login
       var fresh = Object.keys(by).filter(function (p) { return !have[p]; }).map(function (p) { return by[p]; });
       e.innerHTML = '<div class="note">Each parent signs in with their <b>mobile number</b> and a <b>password you set here</b>. One number = one login, even with several children.</div>' +
-        '<div class="card"><b>' + fresh.length + '</b> new parent logins can be made<br><span class="muted sm">' + (Object.keys(by).length - fresh.length) + ' already exist · ' + none + ' students have no phone number · ' + bad + ' have a wrong number (not 9–10 digits)</span></div>' +
+        '<div class="card"><b>' + fresh.length + '</b> new parent logins can be made<br><span class="muted sm">' + (Object.keys(by).length - fresh.length) + ' already exist · ' + none + ' students have no phone number · ' + bad + ' have a wrong number (not 9–10 digits) · ' + shared + ' numbers are shared by different families (skipped for safety)</span></div>' +
         (fresh.length ? '<div class="form"><label>Password for all these parents (min 8 characters). Leave empty to make a different one for each parent.</label><input id="ppw"><button class="btn primary" id="pgo">Create ' + fresh.length + ' parent logins</button></div><div id="pout"></div>' : '');
       var go = $('#pgo', e); if (!go) return;
       go.onclick = async function () {
@@ -935,6 +940,7 @@
       '<div class="note">Everyone signs in with a <b>Login ID</b> and a <b>Password</b>. Tap the blue button to make a new ' + ONE[tab].toLowerCase() + ' login.</div>' +
       (tab === 'parent' ? '<button class="btn primary" id="apf" style="margin-bottom:10px">Make parent logins from students’ phone numbers</button>' : '') +
       '<button class="btn' + (tab === 'parent' ? '' : ' primary') + '" id="adma" style="margin-bottom:12px">＋ Add one ' + ONE[tab] + ' login</button>' +
+      (tab !== 'admin' && rows.length ? '<button class="btn danger" id="dall" style="margin:0 0 12px;width:100%">Delete ALL ' + NAMES[tab].toLowerCase() + ' (' + rows.length + ')</button>' : '') +
       (rows.length ? rows.map(function (r) {
         var me = r.id === state.profile.id;
         return '<div class="card"><div class="row between"><div><h4>' + esc(r.full_name) + '</h4><div class="muted sm">Login ID: <b>' + esc(r.login_id) + '</b></div></div>' +
@@ -944,6 +950,7 @@
       }).join('') : '<div class="empty">No ' + NAMES[tab].toLowerCase() + ' yet.</div>');
     el.querySelectorAll('#atabs button').forEach(function (b) { b.onclick = function () { state.accTab = b.getAttribute('data-r'); viewAccounts(el); }; });
     $('#adma', el).onclick = function () { createAccountView(tab); };
+    if ($('#dall', el)) $('#dall', el).onclick = async function () { if (prompt('This deletes ALL ' + NAMES[tab].toLowerCase() + ' and their logins. Type DELETE to confirm.') !== 'DELETE') return; try { var n = must(await db.rpc('admin_delete_all_accounts', { p_role: tab })); toast('Deleted ' + n + ' logins'); viewAccounts(el); } catch (e) { toast(errText(e), true); } };
     if ($('#apf', el)) $('#apf', el).onclick = parentsFromStudents;
     el.querySelectorAll('[data-act]').forEach(function (b) {
       b.onclick = async function () {
