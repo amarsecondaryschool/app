@@ -60,7 +60,7 @@
       var list = any[s.id] ? ess.filter(function (es) { return !window.AMAR_OPT[cid + '|' + es.subject_id] || chosen[s.id + '|' + es.subject_id]; }).map(function (es) { return window.AMAR_OPT[cid + '|' + es.subject_id] ? Object.assign({}, es, { chosen: true }) : es; }) : ess;
       return { s: s, res: G.studentResult(rule, list, mb[s.id] || {}) }; });
     G.rankAll(items);
-    return { cls: cls, sch: sch, sn: sn, ess: ess, items: items, rule: rule };
+    return { cls: cls, sch: sch, sn: sn, ess: ess, items: items, rule: rule, pending: marks.filter(function (m) { return m.status !== 'approved'; }).length, sids: studs.map(function (s) { return s.id; }) };
   }
   function sheetHtml(D, exam, mid, it) {
     var r = it.res, rule = D.rule, k = 0, rows = '';
@@ -138,6 +138,9 @@
         box.innerHTML = '<div class="row" style="margin:10px 0"><button class="btn primary" id="rp">Print grade sheets</button><button class="btn" id="rl">Download ledger (Excel)</button></div>' +
           '<div class="muted sm">' + (D.rule.verified === false ? 'Grading table not verified – check Grading rules. ' : '') + (mid ? 'Mid-term: one grade per subject, half credit hours.' : 'Terminal: theory + internal marks, weighted by credit hours.') + '</div>' +
           D.items.map(function (it) { var r = it.res; return '<div class="card row between"><div><b>' + esc(it.s.full_name) + '</b><div class="muted sm">' + (r.complete ? r.percentage + '% · GPA ' + f2(r.gpa) : 'Marks missing in ' + r.missing_count + ' subject(s)') + '</div></div><span class="chip ' + (r.result === 'PASS' ? 'ok' : 'bad') + '">' + (it.rank ? '#' + it.rank + ' ' : '') + r.result + '</span></div>'; }).join('');
+        box.insertAdjacentHTML('afterbegin', '<div class="note">' + (D.pending ? '<b>' + D.pending + '</b> marks are waiting for approval. Results can be published only when all marks are approved.' : 'All marks are approved. You can publish the results to parents.') + '</div><div class="row" style="margin-bottom:10px">' + (D.pending ? '<button class="btn primary" id="rap" style="flex:1">Approve all marks</button>' : '') + '<button class="btn primary" id="rpub" style="flex:1">Publish to parents</button></div>');
+        if ($('#rap', box)) $('#rap', box).onclick = async function () { try { must(await db.from('marks').update({ status: 'approved' }).eq('exam_id', ex.id).in('student_id', D.sids)); toast('✓ Approved'); draw(); } catch (e) { toast(A.errText(e), true); } };
+        $('#rpub', box).onclick = function () { V.gradeSheets(el); };
         $('#rp', box).onclick = function () { var w = window.open('', '_blank'); if (!w) return toast('Allow pop-ups to print', true); w.document.write('<html><head><title>Grade sheets</title><style>' + CSS + '</style></head><body>' + D.items.map(function (it) { return sheetHtml(D, ex, mid, it); }).join('') + '</body></html>'); w.document.close(); setTimeout(function () { w.print(); }, 400); };
         $('#rl', box).onclick = async function () { try { await ledgerXlsx(D, ex); } catch (e) { toast(A.errText(e), true); } };
       } catch (e) { box.innerHTML = '<p class="err">' + esc(A.errText(e)) + '</p>'; }
