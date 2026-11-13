@@ -17,11 +17,9 @@
     var ws = wb.Sheets[wb.SheetNames[0]];
     return X.utils.sheet_to_json(ws, { header: 1, raw: true, defval: '' }).filter(function (r) { return r.some(function (x) { return String(x).trim() !== ''; }); });
   }
-  async function saveTable(name, rows) {           // xlsx if available, otherwise CSV
-    try {
-      var X = await A.loadXlsx(), wb = X.utils.book_new();
-      X.utils.book_append_sheet(wb, X.utils.aoa_to_sheet(rows), 'Data'); X.writeFile(wb, name + '.xlsx'); toast(t('export_done'));
-    } catch (e) { A.downloadCsv(name + '.csv', rows); }
+  async function saveTable(name, rows) {           // styled xlsx (blue header, borders, zebra rows); CSV if offline
+    try { await A.styledXlsx([{ name: 'Data', rows: rows, head: 1, left: [0, 1, 2, 3, 4, 5, 6, 7, 8] }], name + '.xlsx'); toast(t('export_done')); }
+    catch (e) { A.downloadCsv(name + '.csv', rows); }
   }
 
   /* ---------- context used to check references ---------- */
