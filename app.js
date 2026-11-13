@@ -503,7 +503,8 @@
     var rest = full.filter(function (f) { return f.more; }), list = full.filter(function (f) { return !f.more; });
     if (rest.length) list.push({ k: 'more', i: '⋯', view: function (e) { e.innerHTML = tiles(rest, false); bindTiles(e, rest); } });
     var search = '';
-    el.innerHTML = '<div id="hdr"></div><div id="info"></div>' + search + '' + tiles(list, false);
+    var hr = new Date().getHours(), gr = hr < 12 ? 'Good morning' : (hr < 17 ? 'Good afternoon' : 'Good evening'), dt = new Date().toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
+    el.innerHTML = '<div class="greet"><div><small>' + gr + '</small><h2>' + esc((p.full_name || '').split(' ')[0]) + '</h2><span>' + esc(dt) + '</span></div>' + logo(54) + '</div><div id="hdr"></div><div id="info"></div>' + search + '<h4 class="sec">Quick access</h4>' + tiles(list, false) + '<div class="credit"><span>Amar Secondary School</span>Made by Tilak Panday</div>';
     bindTiles(el, list); bindMenuSearch(el);
     var hdr = $('#hdr', el), info = $('#info', el);
 
@@ -698,10 +699,11 @@
   function studentProfile(r, ro) {
     push({ title: function () { return r.full_name; }, render: async function (el) {
       var so = []; try { so = must(await db.from('student_optionals').select('slot, subjects(name)').eq('student_id', r.id).order('slot')); } catch (e) {}
+      var cts = []; try { cts = must(await db.from('class_teachers').select('teachers(full_name)').eq('class_id', r.class_id)); } catch (e) {}
       function row(l, v, tel) { return v ? '<div class="irow"><span>' + l + '</span><b>' + (tel ? '<a href="tel:' + esc(v) + '">' + esc(v) + '</a>' : esc(v)) + '</b></div>' : ''; }
       var cl = (r.classes ? r.classes.name : '–') + (r.sections ? ' ' + r.sections.name : '');
       el.innerHTML = '<div class="hdr"><div class="ph" data-photo="' + esc(r.photo_url) + '"><span class=\"av\"><svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4.4 3.6-7 8-7s8 2.6 8 7"/></svg></span></div><div class="hn">' + esc(r.full_name) + '</div><div class="hl">' + esc(r.full_name_ne || '') + '</div><div class="hl">' + esc(cl) + (r.roll_no ? ' · Roll ' + esc(r.roll_no) : '') + '</div></div>' +
-        '<div class="card info">' + row('Student ID', r.student_code) + row('Admission no', r.admission_no) + row('EMIS no', r.emis_no) + row('Gender', r.gender) + row('Date of birth (BS)', r.dob_bs) + row('Date of birth (AD)', r.dob) + row('Blood group', r.blood_group) + row('House', r.house) +
+        '<div class="card info">' + row('Class teacher', cts.map(function (x) { return x.teachers && x.teachers.full_name; }).filter(Boolean).join(', ')) + row('Student ID', r.student_code) + row('Admission no', r.admission_no) + row('EMIS no', r.emis_no) + row('Gender', r.gender) + row('Date of birth (BS)', r.dob_bs) + row('Date of birth (AD)', r.dob) + row('Blood group', r.blood_group) + row('House', r.house) +
         row('Father', r.father_name) + row('Mother', r.mother_name) + row('Guardian', r.guardian_name) + row('Guardian phone', r.guardian_phone, 1) + row('Emergency phone', r.emergency_phone, 1) + row('Address', r.address) + row('Previous school', r.previous_school) + row('Status', r.status) +
         so.map(function (x) { return row('Optional ' + (x.slot === 1 ? 'I' : 'II'), x.subjects && x.subjects.name); }).join('') + '</div><div id="pa"></div>';
       hydratePhotos(el);
