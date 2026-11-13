@@ -24,7 +24,7 @@
   async function attChoices() {   // teachers: only the class they are class teacher of
     var all = await classChoices();
     if (state.profile.role !== 'teacher') return all;
-    try { var tr = await myTeacher(), ct = tr ? must(await db.from('classes').select('id').eq('class_teacher_id', tr.id)) : [], ok = {}; ct.forEach(function (c) { ok[c.id] = 1; }); return all.filter(function (c) { return ok[c.class_id]; }); } catch (e) { return all; }
+    try { var tr = await myTeacher(), ct = tr ? must(await db.from('class_teachers').select('class_id').eq('teacher_id', tr.id)).map(function (x) { return { id: x.class_id }; }) : [], ok = {}; ct.forEach(function (c) { ok[c.id] = 1; }); return all.filter(function (c) { return ok[c.class_id]; }); } catch (e) { return all; }
   }
   async function classChoices() {
     var lk = await A.lookups(), role = state.profile.role, res = [], seen = {};
