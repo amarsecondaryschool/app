@@ -192,19 +192,15 @@
 
   function showSelect() {
     var cards = [['teacher', '', 'card_teacher'], ['parent', '', 'card_student'], ['admin', '', 'card_school']];
-    var h = '<div class="page"><div class="sel-top"><h2>Amar Secondary School</h2>' + langToggle() + '</div>' +
-      '<div class="logocard">' + logo(150) + '<div class="school">' + SCHOOL + '</div></div><div class="rolegrid">';
-    cards.forEach(function (c) {
-      h += '<button class="rolecard" data-role="' + c[0] + '"><span class="e">' + iconSvg(c[0], c[1]) + '</span>' + esc(t(c[2])) + '</button>';
-    });
+    var h = '<div class="welcome"><div class="wl-top">' + langToggle() + '</div><div class="wl-hero">' + logo(128) + '<h1>' + SCHOOL + '</h1><p>“Education is the part of life”</p><small>Bharatpur-22, Padampokhari, Chitwan</small></div>' +
+      '<div class="wl-sheet"><h3>Continue as</h3><div class="rolegrid">';
+    cards.forEach(function (c) { h += '<button class="rolecard" data-role="' + c[0] + '"><span class="e">' + iconSvg(c[0], c[1]) + '</span>' + esc(t(c[2])) + '</button>'; });
     h += '</div>';
     if (!configured) h += '<div class="note">' + esc(t('err_not_configured')) + '</div>';
-    h += '</div>';
+    h += '<div class="credit"><span>Amar Secondary School App</span>Made by Tilak Panday</div></div></div>';
     root.innerHTML = h;
     bindLangToggle(root, showSelect);
-    root.querySelectorAll('[data-role]').forEach(function (b) {
-      b.addEventListener('click', function () { showLogin(b.getAttribute('data-role')); });
-    });
+    root.querySelectorAll('[data-role]').forEach(function (b) { b.addEventListener('click', function () { showLogin(b.getAttribute('data-role')); }); });
   }
 
   function showLogin(role) {
@@ -1014,7 +1010,13 @@
       return r.year + '-' + String(r.month).padStart(2, '0') + '-' + String(r.date).padStart(2, '0');
     } catch (e) { return ''; }
   }
-  function fmtDate(ad) { if (!ad) return ''; var b = bs(ad); return String(ad).slice(0, 10) + (b ? ' · ' + b + ' BS' : ''); }
+  function fmtDate(ad) { if (!ad) return ''; var b = bs(ad); return b ? b + ' BS · ' + String(ad).slice(0, 10) : String(ad).slice(0, 10); }
+  var BSM = ['Baisakh', 'Jestha', 'Ashadh', 'Shrawan', 'Bhadra', 'Ashwin', 'Kartik', 'Mangsir', 'Poush', 'Magh', 'Falgun', 'Chaitra'];
+  function ensureBs() { return new Promise(function (res) { if (!document.querySelector('script[src*="nepali-date-converter"]')) loadBs(); var n = 0; (function w() { if (typeof window.DateConverter === 'function') { bsReady = true; return res(true); } if (++n > 100) return res(false); setTimeout(w, 100); })(); }); }
+  function pad2(x) { return String(x).padStart(2, '0'); }
+  function bsParts(ad) { var r = new window.DateConverter(String(ad).slice(0, 10)).toBs(); return { y: r.year, m: r.month, d: r.date }; }
+  function adOf(y, m, d) { var r = new window.DateConverter(y + '-' + pad2(m) + '-' + pad2(d)).toAd(); return r.year + '-' + pad2(r.month) + '-' + pad2(r.date); }
+  function bsMonthInfo(y, m) { var f = adOf(y, m, 1), n = adOf(m === 12 ? y + 1 : y, m === 12 ? 1 : m + 1, 1), len = Math.round((Date.parse(n) - Date.parse(f)) / 86400000); return { from: f, len: len, wd: new Date(f + 'T00:00:00Z').getUTCDay(), to: addDays(f, len - 1) }; }
 
   /* Excel (SheetJS) loaded only when needed. CSV works without it. */
   var xlsxP = null;
@@ -1071,7 +1073,7 @@
     db: db, state: state, t: t, sub: sub, esc: esc, $: $, toast: toast, must: must, errText: errText, push: push, pop: pop,
     mountForm: mountForm, emptyMsg: emptyMsg, placeholder: placeholder, logo: logo, photoSrc: photoSrc, hydratePhotos: hydratePhotos,
     uploadPhoto: uploadPhoto, downloadCsv: downloadCsv, count: count, roleLabel: roleLabel, signOut: signOut,
-    currentChild: currentChild, lookups: lookups, nm: nm, today: today, addDays: addDays, fmtMoney: fmtMoney, fmtDate: fmtDate, bs: bs,
+    currentChild: currentChild, lookups: lookups, nm: nm, today: today, addDays: addDays, fmtMoney: fmtMoney, fmtDate: fmtDate, bs: bs, ensureBs: ensureBs, bsParts: bsParts, bsMonthInfo: bsMonthInfo, BSM: BSM,
     loadXlsx: loadXlsx, sheet: sheet, printable: printable, school: school, irow: irow, V: V,
     rerender: function () { renderChrome(); renderContent(); },
     dropSchool: function () { schoolCache = null; },
