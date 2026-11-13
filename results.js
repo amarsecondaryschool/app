@@ -82,20 +82,48 @@
       '<table class="g"><tr><th>Intervals in %</th><th>Grade</th><th>Detail</th><th>G.P.</th></tr>' + gr + '</table></div><div class="sg"><span>Class Teacher</span><span>Principal</span></div></section>';
   }
   var CSS = '@page{size:A4 portrait;margin:6mm}*{box-sizing:border-box}body{font-family:"Times New Roman",serif;margin:0}.pg{border:1.5px solid #000;padding:6px 10px;height:137mm;margin-bottom:4mm;display:flex;flex-direction:column;overflow:hidden;break-inside:avoid}.pg:nth-of-type(2n){break-after:page;margin-bottom:0}.c{text-align:center;position:relative}.lg{position:absolute;left:2px;top:0;width:54px;height:54px}.c i{font-size:9px}.c h1{margin:0;font-size:20px;letter-spacing:.5px}.c b{font-size:10px}.c h2{margin:1px 0;font-size:12.5px}.c h3{margin:1px 0 3px;font-size:12px}.who{display:flex;justify-content:space-between;border-top:1.5px solid #000;padding:3px 0;font-size:12px}table{border-collapse:collapse;width:100%}.m th,.m td{border:1px solid #000;text-align:center;padding:2px;font-size:11px}.m td.l{text-align:left;font-weight:bold;padding-left:6px}.dense .m th,.dense .m td{font-size:9.5px;padding:0 3px}.bt{display:flex;justify-content:space-between;align-items:flex-end;font-size:8px;margin-top:auto}.bt ol{padding-left:12px;margin:0}.g{width:44%}.g th,.g td{border:1px solid #000;font-size:7.5px;text-align:center;padding:0 3px}.sg{display:flex;justify-content:space-between;margin-top:14px;font-weight:bold;font-size:11px;padding:0 30px}';
-  function ensureXlsx() { return new Promise(function (res, rej) { if (window.XLSX) return res(); var s = document.createElement('script'); s.src = 'https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js'; s.onload = res; s.onerror = function () { rej(new Error('Could not load the Excel library (internet needed)')); }; document.head.appendChild(s); }); }
+  function loadScript(src, test) { return new Promise(function (res, rej) { if (test()) return res(); var s = document.createElement('script'); s.src = src; s.onload = res; s.onerror = function () { rej(new Error('Could not load the Excel library (internet needed)')); }; document.head.appendChild(s); }); }
+  var GCOL = { 'A+': 'FF1B8E4B', 'A': 'FF1B8E4B', 'B+': 'FF1C6FA8', 'B': 'FF1C6FA8', 'C+': 'FFB86E00', 'C': 'FFB86E00', 'D+': 'FFD9480F', 'D': 'FFD9480F', 'NG': 'FFC62828', 'Ab': 'FFC62828' };
+  /* Styled Excel (blue headers, borders, zebra rows, coloured grades, frozen header). sheets = [{name, rows, head, merges[{r1,c1,r2,c2} 0-based], widths, left[], grades, groups[[c1,c2]], fills[{col,argb}], title}] */
+  async function styledXlsx(sheets, file) {
+    await loadScript('https://cdn.jsdelivr.net/npm/exceljs@4.4.0/dist/exceljs.min.js', function () { return window.ExcelJS; });
+    var wb = new ExcelJS.Workbook(); wb.creator = 'Amar Secondary School';
+    var thin = { style: 'thin', color: { argb: 'FFC9D6E6' } }, bd = { top: thin, left: thin, bottom: thin, right: thin };
+    sheets.forEach(function (sh) {
+      var rows = sh.rows.slice(), head = sh.head || 1, mg = (sh.merges || []).map(function (m) { return { r1: m.r1, c1: m.c1, r2: m.r2, c2: m.c2 }; }), ncol = Math.max.apply(null, rows.map(function (r) { return r.length; }));
+      if (sh.title) { rows.unshift([sh.title]); mg.forEach(function (m) { m.r1++; m.r2++; }); mg.push({ r1: 0, c1: 0, r2: 0, c2: ncol - 1 }); head++; }
+      var ws = wb.addWorksheet(String(sh.name).slice(0, 31).replace(/[\\\/\?\*\[\]:]/g, '-'), { views: [{ state: 'frozen', ySplit: head, xSplit: sh.freezeX || 0 }] });
+      rows.forEach(function (r) { var x = []; for (var i = 0; i < ncol; i++) x.push(r[i] == null ? '' : r[i]); ws.addRow(x); });
+      mg.forEach(function (m) { try { ws.mergeCells(m.r1 + 1, m.c1 + 1, m.r2 + 1, m.c2 + 1); } catch (e) {} });
+      var w = sh.widths || []; for (var c = 0; c < ncol; c++) { var mx = 6; rows.slice(sh.title ? 1 : 0, 60).forEach(function (r) { var l = String(r[c] == null ? '' : r[c]).split('\n').reduce(function (a, s) { return Math.max(a, s.length); }, 0); if (l > mx) mx = l; }); ws.getColumn(c + 1).width = w[c] || Math.min(34, mx + 3); }
+      var left = sh.left || [0], cols = ['FF1F6FB2', 'FF12846F', 'FF7A47D1', 'FFD97706', 'FFC2410C'];
+      rows.forEach(function (r, ri) { var row = ws.getRow(ri + 1), isTitle = sh.title && ri === 0, isHead = ri < head && !isTitle;
+        row.height = isTitle ? 34 : (isHead ? 24 : (sh.rowHeight || 20));
+        for (var c = 0; c < ncol; c++) { var cell = row.getCell(c + 1), v = cell.value;
+          cell.border = bd; cell.alignment = { vertical: 'middle', horizontal: left.indexOf(c) >= 0 && !isHead && !isTitle ? 'left' : 'center', wrapText: true };
+          if (isTitle) { cell.font = { bold: true, size: 15, color: { argb: 'FFFFFFFF' } }; cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF123F6B' } }; }
+          else if (isHead) { var g = 0; (sh.groups || []).forEach(function (gr, gi) { if (c >= gr[0] && c <= gr[1]) g = gi; }); var argb = sh.groups && ri === head - 2 && sh.groups.some(function (gr) { return c >= gr[0] && c <= gr[1]; }) ? cols[(g + 1) % cols.length] : 'FF1F6FB2'; if (sh.groups && ri === head - 1) argb = (sh.groups.some(function (gr) { return c >= gr[0] && c <= gr[1]; }) ? cols[(g + 1) % cols.length] : 'FF2A86C4');
+            cell.font = { bold: true, color: { argb: 'FFFFFFFF' }, size: 11 }; cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: argb } }; }
+          else { cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: (ri - head) % 2 ? 'FFF2F7FD' : 'FFFFFFFF' } }; cell.font = { size: 11, color: { argb: 'FF17324D' } };
+            if (sh.grades && c >= 5 && GCOL[String(v)]) cell.font = { bold: true, size: 11, color: { argb: GCOL[String(v)] } }; }
+          (sh.fills || []).forEach(function (f) { if (f.col === c && !isTitle) { cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: f.argb } }; if (!isHead) cell.font = { italic: true, color: { argb: 'FF6B7F95' }, size: 10 }; } });
+        } });
+      if (sh.title) ws.getRow(1).getCell(1).alignment = { vertical: 'middle', horizontal: 'center' };
+    });
+    var buf = await wb.xlsx.writeBuffer(), a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([buf], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' })); a.download = file; document.body.appendChild(a); a.click(); a.remove();
+  }
+  A.styledXlsx = styledXlsx;
   /* Ledger in the same layout as Gradewise_Result_Report: Subjects row, then S N / Name / Dob / Father / Mother / Symbol and IN, TH, Total grade for every subject */
   async function ledgerXlsx(D, ex) {
-    await ensureXlsx();
     var subs = D.ess.filter(function (es) { return D.items.some(function (it) { return it.res.subjects.some(function (s) { return s.subject_id === es.subject_id && !s.missing; }); }); });
-    var h1 = ['Subjects', '', '', '', '', ''], h2 = ['S N', 'Student Name', 'Dob', 'Father Name', 'Mother Name', 'Symbol Number'], mg = [{ s: { r: 0, c: 0 }, e: { r: 0, c: 5 } }], wc = [{ wch: 6 }, { wch: 26 }, { wch: 12 }, { wch: 24 }, { wch: 22 }, { wch: 13 }];
-    subs.forEach(function (es, i) { var c = 6 + i * 3, n = D.sn[es.subject_id].name, o = window.AMAR_OPT[D.cls.id + '|' + es.subject_id]; h1.push((o ? (o === 2 ? 'Optional II ' : 'Optional I ') : '') + n, '', ''); h2.push('IN', 'TH', 'Total'); mg.push({ s: { r: 0, c: c }, e: { r: 0, c: c + 2 } }); wc.push({ wch: 6 }, { wch: 6 }, { wch: 7 }); });
-    h1.push('', '', ''); h2.push('GPA', 'Result', 'Rank'); wc.push({ wch: 7 }, { wch: 10 }, { wch: 6 });
+    var h1 = ['Subjects', '', '', '', '', ''], h2 = ['S N', 'Student Name', 'Dob', 'Father Name', 'Mother Name', 'Symbol Number'], mg = [{ r1: 0, c1: 0, r2: 0, c2: 5 }], wd = [6, 26, 12, 24, 22, 13], gr = [];
+    subs.forEach(function (es, i) { var c = 6 + i * 3, n = D.sn[es.subject_id].name, o = window.AMAR_OPT[D.cls.id + '|' + es.subject_id]; h1.push((o ? (o === 2 ? 'Optional II  ' : 'Optional I  ') : '') + n, '', ''); h2.push('IN', 'TH', 'Total'); mg.push({ r1: 0, c1: c, r2: 0, c2: c + 2 }); gr.push([c, c + 2]); wd.push(6.5, 6.5, 8); });
+    h1.push('', '', ''); h2.push('GPA', 'Result', 'Rank'); wd.push(8, 11, 7);
     var rows = D.items.map(function (it, i) { var r = [i + 1, it.s.full_name, it.s.dob_bs || '', it.s.father_name || '', it.s.mother_name || '', it.s.admission_no || it.s.roll_no || it.s.student_code.slice(-6)];
       subs.forEach(function (es) { var s = it.res.subjects.filter(function (x) { return x.subject_id === es.subject_id; })[0]; if (!s || s.missing) { r.push('', '', ''); return; }
         r.push(s.parts && s.parts['in'] ? s.parts['in'].grade : '', s.parts && s.parts.th ? s.parts.th.grade : '', s.absent ? 'Ab' : s.grade); });
       return r.concat([it.res.complete ? f2(it.res.gpa) : '', it.res.result, it.rank || '']); });
-    var ws = XLSX.utils.aoa_to_sheet([h1, h2].concat(rows)); ws['!merges'] = mg; ws['!cols'] = wc;
-    var wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, 'Gradewise_Result_Report'); XLSX.writeFile(wb, D.cls.name + ' - ' + ex.name + ' - Ledger.xlsx');
+    await styledXlsx([{ name: 'Gradewise_Result_Report', title: D.sch.name + ' – ' + ex.name + ' – ' + D.cls.name + ' – Gradewise Result Report', rows: [h1, h2].concat(rows), head: 2, merges: mg, widths: wd, left: [1, 3, 4], grades: true, groups: gr, freezeX: 2 }], D.cls.name + ' - ' + ex.name + ' - Ledger.xlsx');
   }
   V.resultsLedger = async function (el) {
     A.skeleton(el);
