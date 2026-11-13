@@ -500,8 +500,9 @@
     var rest = full.filter(function (f) { return f.more; }), list = full.filter(function (f) { return !f.more; });
     if (rest.length) list.push({ k: 'more', i: '⋯', view: function (e) { e.innerHTML = tiles(rest, false); bindTiles(e, rest); } });
     var search = '';
-    var hr = new Date().getHours(), gr = hr < 12 ? 'Good morning' : (hr < 17 ? 'Good afternoon' : 'Good evening'), dt = new Date().toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
-    el.innerHTML = '<div class="greet"><div><small>' + gr + '</small><h2>' + esc((p.full_name || '').split(' ')[0]) + '</h2><span>' + esc(dt) + '</span></div>' + logo(54) + '</div><div id="hdr"></div><div id="info"></div>' + search + '<h4 class="sec">Quick access</h4>' + tiles(list, false) + '<div class="credit"><span>Amar Secondary School</span>Made by Tilak Panday</div>';
+    var hr = new Date().getHours(), gr = hr < 12 ? 'Good morning' : (hr < 17 ? 'Good afternoon' : 'Good evening'), tdy = today(), wd = new Date(tdy + 'T00:00:00Z').toLocaleDateString('en-GB', { weekday: 'long', timeZone: 'UTC' }), adTxt = new Date(tdy + 'T00:00:00Z').toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC' });
+    var dbar = '<div class="datebar"><div class="db-l"><small>' + esc(wd) + '</small><b>' + esc(bsLong(tdy) || adTxt) + '</b><span>' + esc(bsLongNe(tdy)) + '</span></div><div class="db-r"><small>' + gr + '</small><b>' + esc((p.full_name || '').split(' ')[0]) + '</b><span>' + esc(adTxt) + '</span></div></div>';
+    el.innerHTML = dbar + '<div id="hdr"></div><div id="info"></div>' + search + '<h4 class="sec">Quick access</h4>' + tiles(list, false) + '<div class="credit"><span>Amar Secondary School</span>Made by Tilak Panday</div>';
     bindTiles(el, list); bindMenuSearch(el);
     var hdr = $('#hdr', el), info = $('#info', el);
 
@@ -995,28 +996,55 @@
   function addDays(ad, n) { var d = new Date(ad + 'T00:00:00Z'); d.setUTCDate(d.getUTCDate() + n); return d.toISOString().slice(0, 10); }
   function fmtMoney(n) { n = Number(n || 0); return 'Rs ' + n.toLocaleString('en-IN', { maximumFractionDigits: 2 }); }
 
-  /* Bikram Sambat (BS) dates: loaded in the background; AD is shown if it is unavailable */
-  var bsReady = false;
-  function loadBs() {
-    var s = document.createElement('script');
-    s.src = 'https://cdn.jsdelivr.net/npm/@remotemerge/nepali-date-converter@1.2.0/dist/ndc-browser.js';
-    s.onload = function () { bsReady = typeof window.DateConverter === 'function'; };
-    document.head.appendChild(s);
-  }
-  function bs(ad) {
-    if (!bsReady || !ad) return '';
-    try {
-      var r = new window.DateConverter(String(ad).slice(0, 10)).toBs();
-      return r.year + '-' + String(r.month).padStart(2, '0') + '-' + String(r.date).padStart(2, '0');
-    } catch (e) { return ''; }
-  }
-  function fmtDate(ad) { if (!ad) return ''; var b = bs(ad); return b ? b + ' BS · ' + String(ad).slice(0, 10) : String(ad).slice(0, 10); }
+  /* Bikram Sambat (BS) calendar, built in (works offline, 2000-2090 BS = 1943-2033 AD). */
+  var BSD = {2000:'303231323130303029302931',2001:'313132313131302930293030',2002:'313132323130302930293030',2003:'313231323130303029293031',2004:'303231323130303029302931',2005:'313132313131302930293030',2006:'313132323130302930293030',2007:'313231323130303029293031',2008:'313131323131293030292931',2009:'313132313131302930293030',2010:'313132323130302930293030',2011:'313231323130303029293031',2012:'313131323131293030293030',2013:'313132313131302930293030',2014:'313132323130302930293030',2015:'313231323130303029293031',2016:'313131323131293030293030',2017:'313132313131302930293030',2018:'313231323130302930293030',2019:'313231323130303029302931',2020:'313131323131302930293030',2021:'313132313131302930293030',2022:'313231323130303029293030',2023:'313231323130303029302931',2024:'313131323131302930293030',2025:'313132313131302930293030',2026:'313231323130303029293031',2027:'303231323130303029302931',2028:'313132313131302930293030',2029:'313132313230302930293030',2030:'313231323130303029293031',2031:'303231323130303029302931',2032:'313132313131302930293030',2033:'313132323130302930293030',2034:'313231323130303029293031',2035:'303231323131293030292931',2036:'313132313131302930293030',2037:'313132323130302930293030',2038:'313231323130303029293031',2039:'313131323131293030293030',2040:'313132313131302930293030',2041:'313132323130302930293030',2042:'313231323130303029293031',2043:'313131323131293030293030',2044:'313132313131302930293030',2045:'313231323130302930293030',2046:'313231323130303029293031',2047:'313131323131302930293030',2048:'313132313131302930293030',2049:'313231323130303029293030',2050:'313231323130303029302931',2051:'313131323131302930293030',2052:'313132313131302930293030',2053:'313231323130303029293030',2054:'313231323130303029302931',2055:'313132313131302930293030',2056:'313132313230302930293030',2057:'313231323130303029293031',2058:'303231323130303029302931',2059:'313132313131302930293030',2060:'313132323130302930293030',2061:'313231323130303029293031',2062:'313131323131293029302931',2063:'313132313131302930293030',2064:'313132323130302930293030',2065:'313231323130303029293031',2066:'313131323131293030292931',2067:'313132313131302930293030',2068:'313132323130302930293030',2069:'313231323130303029293031',2070:'313131323131293030293030',2071:'313132313131302930293030',2072:'313231323130302930293030',2073:'313231323130303029293031',2074:'313131323131302930293030',2075:'313132313131302930293030',2076:'313231323130303029293030',2077:'313231323130303029302931',2078:'313131323131302930293030',2079:'313132313131302930293030',2080:'313231323130303029293030',2081:'313231323130303029302931',2082:'313131323131302930293030',2083:'313132313131303029303030',2084:'313132313130303029303030',2085:'313231323031303029303030',2086:'303231323130303029303030',2087:'313132313131302930303030',2088:'303132323031303029303030',2089:'303231323130303029303030',2090:'303231323130303029303030'};
   var BSM = ['Baisakh', 'Jestha', 'Ashadh', 'Shrawan', 'Bhadra', 'Ashwin', 'Kartik', 'Mangsir', 'Poush', 'Magh', 'Falgun', 'Chaitra'];
-  function ensureBs() { return new Promise(function (res) { if (!document.querySelector('script[src*="nepali-date-converter"]')) loadBs(); var n = 0; (function w() { if (typeof window.DateConverter === 'function') { bsReady = true; return res(true); } if (++n > 100) return res(false); setTimeout(w, 100); })(); }); }
+  var BSN = ['बैशाख', 'जेठ', 'असार', 'श्रावण', 'भदौ', 'असोज', 'कार्तिक', 'मंसिर', 'पौष', 'माघ', 'फागुन', 'चैत'];
+  var BS0 = Date.UTC(1943, 3, 14) / 86400000, bsReady = true;
+  function bsMlen(y, m) { var s = BSD[y]; return s ? +s.substr((m - 1) * 2, 2) : 0; }
+  function bsYlen(y) { var n = 0; for (var m = 1; m <= 12; m++) n += bsMlen(y, m); return n; }
+  function dayNo(ad) { var p = String(ad).slice(0, 10).split('-'); return Math.round(Date.UTC(+p[0], +p[1] - 1, +p[2]) / 86400000); }
   function pad2(x) { return String(x).padStart(2, '0'); }
-  function bsParts(ad) { var r = new window.DateConverter(String(ad).slice(0, 10)).toBs(); return { y: r.year, m: r.month, d: r.date }; }
-  function adOf(y, m, d) { var r = new window.DateConverter(y + '-' + pad2(m) + '-' + pad2(d)).toAd(); return r.year + '-' + pad2(r.month) + '-' + pad2(r.date); }
-  function bsMonthInfo(y, m) { var f = adOf(y, m, 1), n = adOf(m === 12 ? y + 1 : y, m === 12 ? 1 : m + 1, 1), len = Math.round((Date.parse(n) - Date.parse(f)) / 86400000); return { from: f, len: len, wd: new Date(f + 'T00:00:00Z').getUTCDay(), to: addDays(f, len - 1) }; }
+  function loadBs() {}
+  function ensureBs() { return Promise.resolve(true); }
+  function bsParts(ad) {
+    var n = dayNo(ad) - BS0; if (!(n >= 0)) return null;
+    for (var y = 2000; y <= 2090; y++) { var yl = bsYlen(y); if (n < yl) { for (var m = 1; m <= 12; m++) { var ml = bsMlen(y, m); if (n < ml) return { y: y, m: m, d: n + 1 }; n -= ml; } } n -= yl; }
+    return null;
+  }
+  function adOf(y, m, d) {
+    var n = 0; for (var yy = 2000; yy < y; yy++) n += bsYlen(yy); for (var mm = 1; mm < m; mm++) n += bsMlen(y, mm);
+    return new Date((BS0 + n + (d - 1)) * 86400000).toISOString().slice(0, 10);
+  }
+  function bsMonthInfo(y, m) { var f = adOf(y, m, 1), len = bsMlen(y, m); return { from: f, len: len, wd: new Date(f + 'T00:00:00Z').getUTCDay(), to: addDays(f, len - 1) }; }
+  function bs(ad) { if (!ad) return ''; var p = bsParts(ad); return p ? p.y + '-' + pad2(p.m) + '-' + pad2(p.d) : ''; }
+  function bsLong(ad) { var p = bsParts(ad); return p ? p.d + ' ' + BSM[p.m - 1] + ' ' + p.y : ''; }
+  function bsLongNe(ad) { var p = bsParts(ad); if (!p) return ''; var nd = function (x) { return String(x).replace(/\d/g, function (c) { return '०१२३४५६७८९'[c]; }); }; return nd(p.d) + ' ' + BSN[p.m - 1] + ' ' + nd(p.y); }
+  function fmtDate(ad) { if (!ad) return ''; var b = bs(ad); return b ? b + ' BS · ' + String(ad).slice(0, 10) : String(ad).slice(0, 10); }
+
+  /* Every date box in the app also shows the Nepali (BS) date, and has a "BS" button to pick a date in BS. */
+  function openBsPicker(inp) {
+    var cur = bsParts(inp.value || today()) || { y: 2083, m: 1, d: 1 }, m0 = document.createElement('div'); m0.className = 'modal bsmodal';
+    var yrs = ''; for (var y = 2060; y <= 2090; y++) yrs += '<option' + (y === cur.y ? ' selected' : '') + '>' + y + '</option>';
+    m0.innerHTML = '<div class="msheet"><h3>Pick date (BS)</h3><div class="bspick"><select id="by">' + yrs + '</select><select id="bm">' + BSM.map(function (n, i) { return '<option value="' + (i + 1) + '"' + (i + 1 === cur.m ? ' selected' : '') + '>' + n + ' · ' + BSN[i] + '</option>'; }).join('') + '</select><select id="bd"></select></div><div class="muted sm" id="bpv" style="margin:10px 2px"></div><div class="row"><button type="button" class="btn" id="bc">Cancel</button><button type="button" class="btn primary" id="bo" style="flex:1">Set date</button></div></div>';
+    document.body.appendChild(m0);
+    function days() { var y = +$('#by', m0).value, m = +$('#bm', m0).value, n = bsMlen(y, m), keep = +($('#bd', m0).value || cur.d), h = ''; for (var d = 1; d <= n; d++) h += '<option' + (d === Math.min(keep, n) ? ' selected' : '') + '>' + d + '</option>'; $('#bd', m0).innerHTML = h; prev(); }
+    function prev() { var ad = adOf(+$('#by', m0).value, +$('#bm', m0).value, +$('#bd', m0).value); $('#bpv', m0).textContent = '= ' + ad + ' (AD)'; }
+    $('#by', m0).onchange = days; $('#bm', m0).onchange = days; $('#bd', m0).onchange = prev; days();
+    $('#bc', m0).onclick = function () { m0.remove(); };
+    $('#bo', m0).onclick = function () { inp.value = adOf(+$('#by', m0).value, +$('#bm', m0).value, +$('#bd', m0).value); inp.dispatchEvent(new Event('input', { bubbles: true })); inp.dispatchEvent(new Event('change', { bubbles: true })); m0.remove(); };
+  }
+  function enhanceDates() {
+    document.querySelectorAll('input[type="date"]:not([data-bs])').forEach(function (inp) {
+      inp.setAttribute('data-bs', '1');
+      var row = document.createElement('div'); row.className = 'bsrow'; row.innerHTML = '<span class="bsl"></span><button type="button" class="bsb">BS</button>';
+      inp.insertAdjacentElement('afterend', row);
+      function upd() { var v = bsLong(inp.value); row.firstChild.innerHTML = v ? '<b>' + esc(v) + '</b> BS · ' + esc(bsLongNe(inp.value)) : '<span class="muted">Nepali date (BS) shows here</span>'; }
+      inp.addEventListener('input', upd); inp.addEventListener('change', upd); upd();
+      row.lastChild.onclick = function () { openBsPicker(inp); };
+    });
+  }
+  var enhT = 0; new MutationObserver(function () { if (!enhT) enhT = setTimeout(function () { enhT = 0; enhanceDates(); }, 30); }).observe(document.documentElement, { childList: true, subtree: true });
 
   /* Excel (SheetJS) loaded only when needed. CSV works without it. */
   var xlsxP = null;
@@ -1073,7 +1101,7 @@
     db: db, state: state, t: t, sub: sub, esc: esc, $: $, toast: toast, must: must, errText: errText, push: push, pop: pop,
     mountForm: mountForm, emptyMsg: emptyMsg, placeholder: placeholder, logo: logo, photoSrc: photoSrc, hydratePhotos: hydratePhotos,
     uploadPhoto: uploadPhoto, downloadCsv: downloadCsv, count: count, roleLabel: roleLabel, signOut: signOut,
-    currentChild: currentChild, lookups: lookups, nm: nm, today: today, addDays: addDays, fmtMoney: fmtMoney, fmtDate: fmtDate, bs: bs, ensureBs: ensureBs, bsParts: bsParts, bsMonthInfo: bsMonthInfo, BSM: BSM,
+    currentChild: currentChild, lookups: lookups, nm: nm, today: today, addDays: addDays, fmtMoney: fmtMoney, fmtDate: fmtDate, bs: bs, bsLong: bsLong, bsLongNe: bsLongNe, adOf: adOf, BSN: BSN, bsMlen: bsMlen, ensureBs: ensureBs, bsParts: bsParts, bsMonthInfo: bsMonthInfo, BSM: BSM,
     loadXlsx: loadXlsx, sheet: sheet, printable: printable, school: school, irow: irow, V: V,
     rerender: function () { renderChrome(); renderContent(); },
     dropSchool: function () { schoolCache = null; },
