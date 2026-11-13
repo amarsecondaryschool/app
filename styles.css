@@ -381,3 +381,30 @@ h4.sec { margin:22px 6px 10px; font-size:14px; font-weight:700; color:#5d7893; t
 .days { display:flex; gap:6px; flex-wrap:wrap; margin-top:4px; }
 .dchip { border:1.5px solid #cdd8e5; background:#fff; color:#8aa0b8; border-radius:999px; padding:7px 12px; font-weight:700; font-size:12px; }
 .dchip.on { background:linear-gradient(180deg,#3a9be0,#1a68a6); color:#fff; border-color:#14598f; box-shadow:0 3px 8px rgba(26,104,166,.3); }
+
+/* ===== v18: welcome page, BS calendar ===== */
+.welcome { min-height:100vh; background:linear-gradient(180deg,#1f78b4 0%,#0f4c80 46%,#f3f7fc 46.1%); display:flex; flex-direction:column; }
+.wl-top { display:flex; justify-content:flex-end; padding:14px 16px 0; }
+.wl-hero { text-align:center; color:#fff; padding:6px 20px 26px; }
+.wl-hero img { box-shadow:0 14px 34px rgba(0,0,0,.35) !important; border:5px solid rgba(255,255,255,.9); }
+.wl-hero h1 { margin:14px 0 4px; font-size:23px; font-weight:800; letter-spacing:.8px; color:#fff; }
+.wl-hero p { margin:0; font-style:italic; font-size:13.5px; opacity:.92; } .wl-hero small { display:block; margin-top:6px; font-size:12px; opacity:.75; }
+.wl-sheet { flex:1; background:#f3f7fc; border-radius:30px 30px 0 0; margin-top:-8px; padding:22px 18px 18px; box-shadow:0 -10px 30px rgba(10,50,90,.2); }
+.wl-sheet h3 { margin:0 4px 14px; font-size:15px; color:#5d7893; text-transform:uppercase; letter-spacing:1.2px; font-weight:700; }
+.welcome .rolegrid { display:grid; grid-template-columns:1fr; gap:12px; }
+.welcome .rolecard { display:flex; align-items:center; gap:16px; text-align:left; padding:16px 18px; border-radius:22px; background:linear-gradient(180deg,#fff,#f4f8fd); border:1px solid #dfe9f4; box-shadow:0 10px 24px rgba(30,70,120,.10); font-size:17px; font-weight:700; color:#12395f; }
+.welcome .rolecard .e { width:54px; height:54px; border-radius:18px; display:grid; place-items:center; background:linear-gradient(145deg,#4db3f0,#1c6fa8); box-shadow:0 8px 16px rgba(28,111,168,.35); flex:0 0 54px; margin:0 !important; }
+.welcome .rolecard .e svg { width:28px !important; height:28px !important; color:#fff !important; stroke:#fff; }
+.welcome .rolecard:nth-child(2) .e { background:linear-gradient(145deg,#4fd39a,#1a9566); } .welcome .rolecard:nth-child(3) .e { background:linear-gradient(145deg,#ffb454,#e3811b); }
+.welcome .rolecard:active { transform:scale(.98); }
+.bc { background:#fff; border-radius:24px; padding:14px; box-shadow:0 10px 26px rgba(30,70,120,.12); border:1px solid #e3ecf6; margin-bottom:16px; }
+.bc-h { display:flex; align-items:center; justify-content:space-between; gap:8px; margin-bottom:10px; text-align:center; }
+.bc-h h3 { margin:0; font-size:20px; font-weight:800; color:#0f3a63; } .bc-h span { font-size:11.5px; color:#7b93ab; font-weight:600; }
+.bc-n { width:42px; height:42px; border-radius:14px; border:0; background:linear-gradient(180deg,#3a9be0,#1a68a6); color:#fff; font-size:22px; font-weight:700; box-shadow:0 4px 10px rgba(26,104,166,.35); }
+.bc-w, .bc-g { display:grid; grid-template-columns:repeat(7,1fr); gap:4px; }
+.bc-w div { text-align:center; font-size:11px; font-weight:800; color:#5d7893; padding:6px 0; text-transform:uppercase; } .bc-w .sat { color:#d6335e; }
+.bc-d { position:relative; aspect-ratio:1/1.08; border-radius:14px; background:#f4f8fd; display:flex; flex-direction:column; align-items:center; justify-content:center; }
+.bc-d b { font-size:16px; font-weight:800; color:#17324d; line-height:1; } .bc-d small { font-size:9.5px; color:#8aa0b8; font-weight:600; margin-top:3px; }
+.bc-d.sat b { color:#d6335e; } .bc-d i { position:absolute; bottom:5px; width:6px; height:6px; border-radius:50%; background:#e3811b; }
+.bc-d.today { background:linear-gradient(145deg,#3a9be0,#134f86); box-shadow:0 6px 14px rgba(19,79,134,.4); } .bc-d.today b, .bc-d.today small { color:#fff; }
+.bc-l { margin-top:12px; font-size:13px; } .bc-l div { padding:8px 10px; background:#fff6e5; border-radius:12px; margin-top:6px; } .bc-l b { color:#b45309; }
