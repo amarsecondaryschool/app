@@ -15,7 +15,7 @@
   var state = { lang: 'en', profile: null, stack: [], timeoutMin: 15, timer: null, child: null, children: [] };
   var signed = {};
   var installEvt = null;
-  STR.en.parent_id = 'Parent mobile number'; if (STR.ne) STR.ne.parent_id = 'अभिभावकको मोबाइल नम्बर'; STR.en.parent_phone = 'Parent mobile number (this is the login ID)'; STR.en.more = 'More'; STR.en.class_routine = 'Class routine'; STR.en.timetable = 'Class routine'; STR.en.marksEntry = 'Marks'; STR.en.results = 'Results'; STR.en.home = STR.en.home || 'Home'; STR.en.grade_sheet = 'Results & Ledger'; STR.en.exams_manage = 'Exams (create / publish)'; STR.en.student_codes = "Child's Student ID (several children: separate with commas)"; STR.en.subject_mgmt = 'Subjects'; STR.en.user_accounts = 'Logins (ID & password)'; if (STR.ne) STR.ne.more = STR.ne.more || 'थप';
+  STR.en.parent_id = 'Parent mobile number'; if (STR.ne) STR.ne.parent_id = 'अभिभावकको मोबाइल नम्बर'; STR.en.parent_phone = 'Parent mobile number (this is the login ID)'; STR.en.more = 'More'; STR.en.publish_results = 'Publish results'; STR.en.grade_sheet = 'Results & Ledger'; STR.en.class_routine = 'Class routine'; STR.en.timetable = 'Class routine'; STR.en.marksEntry = 'Marks'; STR.en.results = 'Results'; STR.en.home = STR.en.home || 'Home'; STR.en.grade_sheet = 'Results & Ledger'; STR.en.exams_manage = 'Exams (create / publish)'; STR.en.student_codes = "Child's Student ID (several children: separate with commas)"; STR.en.subject_mgmt = 'Subjects'; STR.en.user_accounts = 'Logins (ID & password)'; if (STR.ne) STR.ne.more = STR.ne.more || 'थप';
 
   try { state.lang = localStorage.getItem('amar_lang') || 'en'; } catch (e) {}
 
@@ -390,6 +390,7 @@
     { k: 'attendance', i: '', g: 'a', name: 'attendance' },
     { k: 'marks_entry', i: '', g: 'a', name: 'marksEntry' },
     { k: 'exams_manage', more: 1, i: '', g: 'a', name: 'exams' },
+    { k: 'publish_results', i: '', g: 'a', name: 'gradeSheets' },
     { k: 'grade_sheet', i: '', g: 'a', name: 'resultsLedger' },
     { k: 'auto_reports', more: 1, i: '', g: 'a', name: 'reports' },
     { k: 'homework', i: '', g: 'a', name: 'homework' },
@@ -448,7 +449,7 @@
     home: '<path d="M3 11l9-8 9 8"/><path d="M5 10v10h14V10"/><path d="M10 20v-6h4v6"/>',
     mail: '<rect x="3" y="5" width="18" height="14" rx="2.5"/><path d="M3.5 7l8.5 6 8.5-6"/>'
   };
-  var ICK = { home: 'home', marksEntry: 'pencil', results: 'award', student_records: 'users', parent_info: 'users', teacher_records: 'cap', teachers: 'cap', user_accounts: 'key', class_mgmt: 'school', my_classes: 'school', subject_mgmt: 'book', attendance: 'check', marks_entry: 'pencil', exams_manage: 'file', grade_sheet: 'award', auto_reports: 'file', examination: 'file', exam_routine: 'file', homework: 'book', class_routine: 'clock', timetable: 'clock', fees: 'wallet', account: 'wallet', notices: 'bell', inbox: 'mail', calendar: 'calendar', staff_leave: 'calendar', import_export: 'upload', settings: 'gear', more: 'dots', admin: 'school', teacher: 'cap', parent: 'users' };
+  var ICK = { publish_results: 'upload', home: 'home', marksEntry: 'pencil', results: 'award', student_records: 'users', parent_info: 'users', teacher_records: 'cap', teachers: 'cap', user_accounts: 'key', class_mgmt: 'school', my_classes: 'school', subject_mgmt: 'book', attendance: 'check', marks_entry: 'pencil', exams_manage: 'file', grade_sheet: 'award', auto_reports: 'file', examination: 'file', exam_routine: 'file', homework: 'book', class_routine: 'clock', timetable: 'clock', fees: 'wallet', account: 'wallet', notices: 'bell', inbox: 'mail', calendar: 'calendar', staff_leave: 'calendar', import_export: 'upload', settings: 'gear', more: 'dots', admin: 'school', teacher: 'cap', parent: 'users' };
   function iconSvg(k, fb) { var p = ICP[ICK[k]]; return p ? '<svg viewBox="0 0 24 24" aria-hidden="true">' + p + '</svg>' : fb; }
   function tileHtml(f, i) {
     var cls = f.g ? GROUPS[f.g][1] : PALETTE[i % 4];
