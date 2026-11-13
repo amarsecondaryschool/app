@@ -85,6 +85,7 @@
     go(start || 0);
   }
   function skeleton(el) { el.innerHTML = '<div class="skel"></div><div class="skel"></div><div class="skel"></div>'; }
+  function monthEnd(m) { return m + '-' + String(new Date(Date.UTC(+m.slice(0, 4), +m.slice(5, 7), 0)).getUTCDate()).padStart(2, '0'); }
   function dayName(i) { return t('day_' + i); }
   function weekday(ad) { return new Date(ad + 'T00:00:00Z').getUTCDay(); }
   function isNetErr(e) { return !navigator.onLine || /fetch|network|failed to|load failed/i.test((e && e.message) || ''); }
@@ -193,22 +194,25 @@
   /* month view for one student (parent, or admin/teacher history) */
   async function attMonthView(el, stu) {
     var month = A.today().slice(0, 7);
-    function shift(m, d) { var y = +m.slice(0, 4), mo = +m.slice(5, 7) - 1 + d; var dt = new Date(Date.UTC(y, mo, 1)); return dt.toISOString().slice(0, 7); }
+    var bmState = null;
+    function bshift(d) { if (!bmState) return; var y = bmState.y, m = bmState.m + d; if (m > 12) { m = 1; y++; } if (m < 1) { m = 12; y--; } bmState = { y: y, m: m }; }
     async function draw() {
       skeleton(el);
-      var from = month + '-01', to = month + '-31';
+      var bsok = await A.ensureBs(), from, to, title;
+      if (bsok) { if (!bmState) { var tp = A.bsParts(A.today()); bmState = { y: tp.y, m: tp.m }; } var inf = A.bsMonthInfo(bmState.y, bmState.m); from = inf.from; to = inf.to; title = A.BSM[bmState.m - 1] + ' ' + bmState.y + ' BS'; }
+      else { from = month + '-01'; to = monthEnd(month); title = month; }
       var rows = must(await db.from('attendance').select('att_date, status').eq('student_id', stu.id).gte('att_date', from).lte('att_date', to).order('att_date', { ascending: false }));
       var c = { present: 0, absent: 0, late: 0, leave: 0 }; rows.forEach(function (r) { c[r.status]++; });
       var tot = rows.length, pct = tot ? Math.round((c.present + c.late) / tot * 100) : 0;
-      el.innerHTML = '<div class="card row between"><button class="icon" id="pm">‹</button><div style="text-align:center"><h4>' + esc(month) + '</h4><div class="muted xs">' + esc(stu.full_name) + '</div></div><button class="icon" id="nm">›</button></div>' +
+      el.innerHTML = '<div class="card row between"><button class="icon" id="pm">‹</button><div style="text-align:center"><h4>' + esc(title) + '</h4><div class="muted xs">' + esc(stu.full_name) + '</div></div><button class="icon" id="nm">›</button></div>' +
         '<div class="stat3" style="grid-template-columns:repeat(4,1fr)"><div class="sbox ok"><b>' + c.present + '</b><span>' + esc(t('st_present')) + '</span></div><div class="sbox bad"><b>' + c.absent +
         '</b><span>' + esc(t('st_absent')) + '</span></div><div class="sbox warn"><b>' + c.late + '</b><span>' + esc(t('st_late')) + '</span></div><div class="sbox"><b>' + c.leave + '</b><span>' + esc(t('st_leave')) + '</span></div></div>' +
         '<div class="card"><div class="row between"><b>' + esc(t('attendance_pct')) + '</b><b>' + pct + '%</b></div><div class="bar-bg" style="margin-top:8px"><div class="bar-fg" style="width:' + pct + '%"></div></div></div>' +
         (rows.length ? rows.map(function (r) {
           return '<div class="card row between"><div><b>' + esc(A.fmtDate(r.att_date)) + '</b><div class="muted xs">' + esc(dayName(weekday(r.att_date))) + '</div></div>' + statusChip(r.status) + '</div>';
         }).join('') : A.emptyMsg());
-      $('#pm', el).onclick = function () { month = shift(month, -1); draw(); };
-      $('#nm', el).onclick = function () { month = shift(month, 1); draw(); };
+      $('#pm', el).onclick = function () { bshift(-1); draw(); };
+      $('#nm', el).onclick = function () { bshift(1); draw(); };
     }
     await draw();
   }
@@ -231,7 +235,7 @@
       if (!studs.length) { body.innerHTML = A.emptyMsg('no_results'); return; }
       var ids = studs.map(function (s) { return s.id; });
       var rows = await fetchAll(function (a, b) {
-        return db.from('attendance').select('student_id, att_date, status').in('student_id', ids).gte('att_date', m + '-01').lte('att_date', m + '-31').range(a, b);
+        return db.from('attendance').select('student_id, att_date, status').in('student_id', ids).gte('att_date', m + '-01').lte('att_date', monthEnd(m)).range(a, b);
       });
       var by = {}; studs.forEach(function (s) { by[s.id] = { present: 0, absent: 0, late: 0, leave: 0 }; });
       var daily = {}; rows.forEach(function (r) { by[r.student_id][r.status]++; daily[r.att_date] = daily[r.att_date] || { present: 0, absent: 0, late: 0, leave: 0 }; daily[r.att_date][r.status]++; });
@@ -257,7 +261,7 @@
       };
       if (state.profile.role === 'admin') {          // school-wide, class by class
         var lk = await A.lookups();
-        var all = await fetchAll(function (a, b) { return db.from('attendance').select('class_id, status').gte('att_date', m + '-01').lte('att_date', m + '-31').range(a, b); });
+        var all = await fetchAll(function (a, b) { return db.from('attendance').select('class_id, status').gte('att_date', m + '-01').lte('att_date', monthEnd(m)).range(a, b); });
         var g = {}; all.forEach(function (r) { g[r.class_id] = g[r.class_id] || [0, 0]; g[r.class_id][1]++; if (r.status === 'present' || r.status === 'late') g[r.class_id][0]++; });
         body.innerHTML += '<h3 class="mt">' + esc(t('classwise_pct')) + '</h3>' + (Object.keys(g).length ? lk.classes.filter(function (c) { return g[c.id]; }).map(function (c) {
           var p = Math.round(g[c.id][0] / g[c.id][1] * 100);
