@@ -579,7 +579,18 @@ h2,h3,h4 { color:var(--ink); }
 .tn { font-style:normal; font-size:11px; font-weight:700; color:#1c6fa8; }
 .rl i { white-space:normal; }
 
+/* polished, realistic buttons */
+.grid .tile { background:linear-gradient(180deg,#ffffff 0%,#f3f7fc 100%) !important; border:1px solid #dde7f3 !important; box-shadow:0 1px 0 #fff inset,0 2px 3px rgba(19,41,75,.06),0 12px 24px -6px rgba(19,41,75,.16) !important; position:relative; overflow:hidden; transition:transform .12s, box-shadow .12s; }
+.grid .tile::after { content:""; position:absolute; left:0; right:0; top:0; height:46%; background:linear-gradient(180deg,rgba(255,255,255,.9),rgba(255,255,255,0)); pointer-events:none; border-radius:22px 22px 0 0; }
+.grid .tile > * { position:relative; z-index:1; }
+.grid .tile .ico { box-shadow:0 8px 16px -2px rgba(19,41,75,.32),0 2px 0 rgba(255,255,255,.55) inset,0 -3px 6px rgba(0,0,0,.18) inset !important; border:1px solid rgba(255,255,255,.35); }
+.grid .tile .ico::before { content:""; position:absolute; left:8%; right:8%; top:5%; height:42%; border-radius:14px 14px 40% 40%; background:linear-gradient(180deg,rgba(255,255,255,.5),rgba(255,255,255,0)); pointer-events:none; }
+.grid .tile .ico { position:relative; }
+.grid .tile .ico svg { filter:drop-shadow(0 1px 1px rgba(0,0,0,.25)); stroke:#fff !important; }
+.grid .tile:active { transform:translateY(2px) scale(.97) !important; box-shadow:0 1px 0 #fff inset,0 1px 2px rgba(19,41,75,.15) !important; }
+
 /* simpler hero */
+.hero2 h1 { font-size:30px !important; margin:0 0 10px !important; } .hero2 h1 em { font-style:normal; font-weight:700; opacity:.9; }
 .hero2 { padding:20px 18px 18px !important; }
 .hero2 .h2-date { margin-top:14px; padding-top:0; border-top:0; align-items:center; }
 .hero2 .h2-date b { font-size:16px; } .hero2 .h2-date span { background:rgba(255,255,255,.18); padding:3px 10px; border-radius:999px; font-size:12px; font-weight:700; opacity:1; }
@@ -623,4 +634,4 @@ input.bs-hid { position:absolute !important; opacity:0 !important; pointer-event
 .bc-sel, .bc-hl { clear:both; }
 .ctb.sm { font-size:10.5px; padding:3px 9px; margin-right:6px; white-space:nowrap; }
 .appbar .ctb { flex:none; }
-:root { --ver:24; }
+:root { --ver:25; }
