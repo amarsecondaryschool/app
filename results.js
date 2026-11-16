@@ -26,17 +26,22 @@
   function hasMarks(m) { return m && (m.is_absent || m.theory != null || m.practical != null || m.internal != null) && !(m.theory === '' && m.internal === ''); }
   G.studentResult = function (rule, ess, mbs) {   // same maths as grading.js, but uses the weighted subject rule; optional subjects the student does not study are skipped
     var opt = window.AMAR_OPT, list = ess.filter(function (es) { return !(opt[es.class_id + '|' + es.subject_id] && !es.chosen && !hasMarks(mbs[es.subject_id])); });
-    var subs = list.map(function (es) { return G.subjectResult(rule, es, mbs[es.subject_id]); }), full = 0, obt = 0, cr = 0, gs = 0, ng = 0, miss = 0;
-    subs.forEach(function (s) { if (s.missing) { miss++; return; } full += s.full; obt += s.obtained; cr += s.credit; gs += s.gp * s.credit; if (!s.pass) ng++; });
-    var pct = full > 0 ? G.round(obt / full * 100, 2) : 0, gpa = cr > 0 ? G.round(gs / cr, Number(rule.rounding) || 2) : 0, complete = miss === 0 && subs.length > 0;
+    var subs = list.map(function (es) { return G.subjectResult(rule, es, mbs[es.subject_id]); }), full = 0, obt = 0, cr = 0, gs = 0, ng = 0, miss = 0, cnt = 0, sg = 0, nocr = !!(list.length && window.AMAR_NOCR[list[0].class_id]);
+    subs.forEach(function (s) { if (s.missing) { miss++; return; } if (nocr) s.credit = 0; cnt++; sg += s.gp; full += s.full; obt += s.obtained; cr += s.credit; gs += s.gp * s.credit; if (!s.pass) ng++; });
+    var pct = full > 0 ? G.round(obt / full * 100, 2) : 0, gpa = nocr ? (cnt ? G.round(sg / cnt, Number(rule.rounding) || 2) : 0) : (cr > 0 ? G.round(gs / cr, Number(rule.rounding) || 2) : 0), complete = miss === 0 && subs.length > 0;
     return { subjects: subs, total_full: full, total_obtained: obt, percentage: pct, gpa: gpa, gpa_valid: complete && ng === 0, ng_count: ng, missing_count: miss, complete: complete,
       overall_grade: complete ? G.gradeFor(rule, pct).grade : null, result: !complete ? 'INCOMPLETE' : (ng === 0 ? 'PASS' : 'NG') };
   };
   async function refreshOpt() {
     var r = must(await db.from('class_subjects').select('class_id,subject_id,is_compulsory,opt_slot')); window.AMAR_OPT = {};
     r.forEach(function (x) { if (!x.is_compulsory) window.AMAR_OPT[x.class_id + '|' + x.subject_id] = x.opt_slot || 1; });
+    window.AMAR_NOCR = {}; try { (await A.lookups()).classes.forEach(function (c) { if (window.AMAR_EARLY && window.AMAR_EARLY[c.level]) window.AMAR_NOCR[c.id] = 1; }); } catch (e) {}
   }
-  Object.keys(V).forEach(function (k) { var f = V[k]; if (typeof f === 'function') V[k] = function () { var a = arguments, t = this; return refreshOpt().catch(function () {}).then(function () { return f.apply(t, a); }); }; });
+  window.AMAR_NOCR = window.AMAR_NOCR || {};
+  /* the optional-subject map is only refreshed for the screens that calculate results (not for every screen) */
+  var optAt = 0;
+  ['results', 'reports', 'gradeSheets', 'exams', 'resultsLedger'].forEach(function (k) { var f = V[k]; if (typeof f !== 'function') return;
+    V[k] = function () { var a = arguments, t = this, fresh = Date.now() - optAt < 20000; return (fresh ? Promise.resolve() : refreshOpt().then(function () { optAt = Date.now(); }).catch(function () {})).then(function () { return f.apply(t, a); }); }; });
 
   function f2(x) { return (Math.round(x * 100) / 100).toFixed(2); }
   function csv(name, rows) {
@@ -60,25 +65,31 @@
       var list = any[s.id] ? ess.filter(function (es) { return !window.AMAR_OPT[cid + '|' + es.subject_id] || chosen[s.id + '|' + es.subject_id]; }).map(function (es) { return window.AMAR_OPT[cid + '|' + es.subject_id] ? Object.assign({}, es, { chosen: true }) : es; }) : ess;
       return { s: s, res: G.studentResult(rule, list, mb[s.id] || {}) }; });
     G.rankAll(items);
-    return { cls: cls, sch: sch, sn: sn, ess: ess, items: items, rule: rule, pending: marks.filter(function (m) { return m.status !== 'approved'; }).length, sids: studs.map(function (s) { return s.id; }) };
+    var byS = {}, subjRank = [];   // rank of every student in every subject (same marks = same rank) + subjects ranked by class average
+    items.forEach(function (it) { it.res.subjects.forEach(function (sr) { if (sr.missing || sr.absent || !(sr.full > 0)) return; (byS[sr.subject_id] = byS[sr.subject_id] || []).push({ sr: sr, p: sr.obtained / sr.full }); }); });
+    Object.keys(byS).forEach(function (id) { var a = byS[id].sort(function (x, y) { return y.p - x.p; }), rk = 0, prev = null;
+      a.forEach(function (x, i) { if (prev === null || x.p < prev - 1e-9) { rk = i + 1; prev = x.p; } x.sr.rank = rk; });
+      subjRank.push({ id: id, n: a.length, avg: a.reduce(function (t, x) { return t + x.p; }, 0) / a.length * 100, high: a[0].p * 100, pass: a.filter(function (x) { return x.sr.pass; }).length }); });
+    subjRank.sort(function (x, y) { return y.avg - x.avg; }).forEach(function (x, i) { x.rank = i + 1; });
+    return { subjRank: subjRank, cls: cls, sch: sch, sn: sn, ess: ess, items: items, rule: rule, pending: marks.filter(function (m) { return m.status !== 'approved'; }).length, sids: studs.map(function (s) { return s.id; }) };
   }
   function sheetHtml(D, exam, mid, it) {
-    var r = it.res, rule = D.rule, k = 0, rows = '';
+    var r = it.res, rule = D.rule, k = 0, rows = '', nc = !!(window.AMAR_NOCR && window.AMAR_NOCR[D.cls.id]), cf = function (x) { return nc ? '-' : f2(x); }, rk = function (x) { return x ? x : ''; };
     r.subjects.forEach(function (sr) {
       if (sr.missing) return; k++;
       var nm = (D.sn[sr.subject_id].name || '').toUpperCase(), opt = window.AMAR_OPT[D.cls.id + '|' + sr.subject_id] ? 'OPT-' + (window.AMAR_OPT[D.cls.id + '|' + sr.subject_id] === 2 ? 'II' : 'I') + ' ' : (D.cls.level >= 9 && D.cls.level <= 10 ? 'COMP. ' : '');
       if (!mid && sr.parts) {
         var L = [['th', 'TH'], ['pr', 'PR'], ['in', 'IN']].filter(function (c) { return sr.parts[c[0]]; });
-        rows += '<tr><td rowspan="' + L.length + '">' + k + '</td><td class="l">' + opt + esc(nm) + ' (' + L[0][1] + ')</td><td>' + f2(sr.parts[L[0][0]].ch) + '</td><td>' + f2(sr.parts[L[0][0]].gp).replace(/0$/, '') + '</td><td>' + sr.parts[L[0][0]].grade + '</td><td rowspan="' + L.length + '">' + sr.grade + '</td></tr>';
-        L.slice(1).forEach(function (c) { rows += '<tr><td class="l">' + opt + esc(nm) + ' (' + c[1] + ')</td><td>' + f2(sr.parts[c[0]].ch) + '</td><td>' + f2(sr.parts[c[0]].gp).replace(/0$/, '') + '</td><td>' + sr.parts[c[0]].grade + '</td></tr>'; });
-      } else rows += '<tr><td>' + k + '</td><td class="l">' + opt + esc(nm) + '</td><td>' + f2(sr.credit) + '</td><td>' + (sr.absent ? 'Ab*' : sr.grade) + '</td><td>' + f2(sr.gp) + '</td></tr>';
+        rows += '<tr><td rowspan="' + L.length + '">' + k + '</td><td class="l">' + opt + esc(nm) + ' (' + L[0][1] + ')</td><td>' + cf(sr.parts[L[0][0]].ch) + '</td><td>' + f2(sr.parts[L[0][0]].gp).replace(/0$/, '') + '</td><td>' + sr.parts[L[0][0]].grade + '</td><td rowspan="' + L.length + '">' + sr.grade + '</td><td rowspan="' + L.length + '">' + rk(sr.rank) + '</td></tr>';
+        L.slice(1).forEach(function (c) { rows += '<tr><td class="l">' + opt + esc(nm) + ' (' + c[1] + ')</td><td>' + cf(sr.parts[c[0]].ch) + '</td><td>' + f2(sr.parts[c[0]].gp).replace(/0$/, '') + '</td><td>' + sr.parts[c[0]].grade + '</td></tr>'; });
+      } else rows += '<tr><td>' + k + '</td><td class="l">' + opt + esc(nm) + '</td><td>' + cf(sr.credit) + '</td><td>' + (sr.absent ? 'Ab*' : sr.grade) + '</td><td>' + f2(sr.gp) + '</td><td>' + rk(sr.rank) + '</td></tr>';
     });
-    var cr = r.subjects.reduce(function (a, x) { return a + (x.missing ? 0 : x.credit); }, 0), head = mid ? '<tr><th>S.N.</th><th>SUBJECTS</th><th>CREDIT HOUR</th><th>OBTAINED GRADE</th><th>GRADE POINT</th></tr>' : '<tr><th>S.N.</th><th>SUBJECTS</th><th>CREDIT HOUR</th><th>GRADE POINT</th><th>GRADE</th><th>FINAL GRADE</th></tr>';
-    var foot = mid ? '<tr><td colspan="2"><b>GRADE POINT AVERAGE (GPA)</b></td><td><b>' + f2(cr) + '</b></td><td>-</td><td><b>' + (r.complete ? f2(r.gpa) : '') + '</b></td></tr>' : '<tr><td colspan="2"><b>GRADE POINT AVERAGE (GPA)</b></td><td><b>' + f2(cr) + '</b></td><td colspan="3"><b>' + (r.complete ? f2(r.gpa) + ' &nbsp; (' + esc(fg(rule, r.gpa).desc || '') + ')' : 'INCOMPLETE') + '</b></td></tr>';
+    var cr = r.subjects.reduce(function (a, x) { return a + (x.missing ? 0 : x.credit); }, 0), head = mid ? '<tr><th>S.N.</th><th>SUBJECTS</th><th>CREDIT HOUR</th><th>OBTAINED GRADE</th><th>GRADE POINT</th><th>RANK</th></tr>' : '<tr><th>S.N.</th><th>SUBJECTS</th><th>CREDIT HOUR</th><th>GRADE POINT</th><th>GRADE</th><th>FINAL GRADE</th><th>RANK</th></tr>';
+    var foot = mid ? '<tr><td colspan="2"><b>GRADE POINT AVERAGE (GPA)</b></td><td><b>' + cf(cr) + '</b></td><td>-</td><td><b>' + (r.complete ? f2(r.gpa) : '') + '</b></td><td>-</td></tr>' : '<tr><td colspan="2"><b>GRADE POINT AVERAGE (GPA)</b></td><td><b>' + cf(cr) + '</b></td><td colspan="4"><b>' + (r.complete ? f2(r.gpa) + ' &nbsp; (' + esc(fg(rule, r.gpa).desc || '') + ')' : 'INCOMPLETE') + '</b></td></tr>';
     var gt = rule.rules.slice().sort(function (a, b) { return b.min - a.min; }), gr = gt.map(function (g, i) { var hi = i ? gt[i - 1].min : 100; return '<tr><td>' + (i ? g.min + ' to below ' + hi : g.min + ' to ' + hi) + '</td><td>' + g.grade + '</td><td>' + esc(g.desc || '') + '</td><td>' + f2(+g.gp).replace(/0$/, '') + '</td></tr>'; }).join('');
     return '<section class="pg' + (k > 9 ? ' dense' : '') + '"><div class="c"><img class="lg" src="' + new URL('logo.png', location.href).href + '"><i>“Education is the part of life”</i><h1>' + esc(D.sch.name) + '</h1><b>' + esc(D.sch.address || 'Bharatpur -22, Padampokhari, Chitwan') + ' | Estd.: 2012</b><h2>' + esc(exam.name.toUpperCase()) + ' - ' + esc(exam.academic_year || '') + '</h2><h3><u>Grade - Sheet</u></h3></div>' +
-      '<div class="who"><span>Name of Student: <b>' + esc(it.s.full_name) + '</b></span><span>SYMBOL NO: <b>' + esc(it.s.admission_no || it.s.roll_no || it.s.student_code.slice(-6)) + '</b></span><span>CLASS: <b>' + esc(D.cls.name.replace(/^Class\s*/, '')) + '</b></span></div>' +
-      '<table class="m">' + head + rows + foot + '</table><div class="bt"><ol><li>One Credit Hour Equals 32 Clock Hours.</li><li>TH = Theory, IN = Internal (CAS), Ab* = Absent.</li><li>GPA = (Σ[Credit Hour × Grade Point]) / Total Credit Hour</li></ol>' +
+      '<div class="who"><span>Name of Student: <b>' + esc(it.s.full_name) + '</b></span><span>SYMBOL NO: <b>' + esc(it.s.admission_no || it.s.roll_no || it.s.student_code.slice(-6)) + '</b></span><span>CLASS: <b>' + esc(D.cls.name.replace(/^Class\s*/, '')) + '</b></span>' + (it.rank && r.complete ? '<span>RANK: <b>' + it.rank + ' / ' + D.items.length + '</b></span>' : '') + '</div>' +
+      '<table class="m">' + head + rows + foot + '</table><div class="bt"><ol><li>One Credit Hour Equals 32 Clock Hours.</li><li>TH = Theory, IN = Internal (CAS), Ab* = Absent.</li><li>' + (nc ? 'GPA = Average of the Grade Points of all subjects (no credit hours).' : 'GPA = (Σ[Credit Hour × Grade Point]) / Total Credit Hour') + '</li><li>Rank = position in the class (same marks, same rank).</li></ol>' +
       '<table class="g"><tr><th>Intervals in %</th><th>Grade</th><th>Detail</th><th>G.P.</th></tr>' + gr + '</table></div><div class="sg"><span>Class Teacher</span><span>Principal</span></div></section>';
   }
   var CSS = '@page{size:A4 portrait;margin:6mm}*{box-sizing:border-box}body{font-family:"Times New Roman",serif;margin:0}.pg{border:1.5px solid #000;padding:6px 10px;height:137mm;margin-bottom:4mm;display:flex;flex-direction:column;overflow:hidden;break-inside:avoid}.pg:nth-of-type(2n){break-after:page;margin-bottom:0}.c{text-align:center;position:relative}.lg{position:absolute;left:2px;top:0;width:54px;height:54px}.c i{font-size:9px}.c h1{margin:0;font-size:20px;letter-spacing:.5px}.c b{font-size:10px}.c h2{margin:1px 0;font-size:12.5px}.c h3{margin:1px 0 3px;font-size:12px}.who{display:flex;justify-content:space-between;border-top:1.5px solid #000;padding:3px 0;font-size:12px}table{border-collapse:collapse;width:100%}.m th,.m td{border:1px solid #000;text-align:center;padding:2px;font-size:11px}.m td.l{text-align:left;font-weight:bold;padding-left:6px}.dense .m th,.dense .m td{font-size:9.5px;padding:0 3px}.bt{display:flex;justify-content:space-between;align-items:flex-end;font-size:8px;margin-top:auto}.bt ol{padding-left:12px;margin:0}.g{width:44%}.g th,.g td{border:1px solid #000;font-size:7.5px;text-align:center;padding:0 3px}.sg{display:flex;justify-content:space-between;margin-top:14px;font-weight:bold;font-size:11px;padding:0 30px}';
@@ -117,14 +128,17 @@
   async function ledgerXlsx(D, ex) {
     var subs = D.ess.filter(function (es) { return D.items.some(function (it) { return it.res.subjects.some(function (s) { return s.subject_id === es.subject_id && !s.missing; }); }); });
     var h1 = ['Subjects', '', '', '', '', ''], h2 = ['S N', 'Student Name', 'Dob', 'Father Name', 'Mother Name', 'Symbol Number'], mg = [{ r1: 0, c1: 0, r2: 0, c2: 5 }], wd = [6, 26, 12, 24, 22, 13], gr = [];
-    subs.forEach(function (es, i) { var c = 6 + i * 3, n = D.sn[es.subject_id].name, o = window.AMAR_OPT[D.cls.id + '|' + es.subject_id]; h1.push((o ? (o === 2 ? 'Optional II  ' : 'Optional I  ') : '') + n, '', ''); h2.push('IN', 'TH', 'Total'); mg.push({ r1: 0, c1: c, r2: 0, c2: c + 2 }); gr.push([c, c + 2]); wd.push(6.5, 6.5, 8); });
+    subs.forEach(function (es, i) { var c = 6 + i * 7, n = D.sn[es.subject_id].name, o = window.AMAR_OPT[D.cls.id + '|' + es.subject_id]; h1.push((o ? (o === 2 ? 'Optional II  ' : 'Optional I  ') : '') + n, '', '', '', '', '', ''); h2.push('IN', 'IN GP', 'TH', 'TH GP', 'Total', 'GP', 'Rank'); mg.push({ r1: 0, c1: c, r2: 0, c2: c + 6 }); gr.push([c, c + 6]); wd.push(5.5, 6, 5.5, 6, 7, 6, 6); });
     h1.push('', '', ''); h2.push('GPA', 'Result', 'Rank'); wd.push(8, 11, 7);
     var rows = D.items.map(function (it, i) { var r = [i + 1, it.s.full_name, it.s.dob_bs || '', it.s.father_name || '', it.s.mother_name || '', it.s.admission_no || it.s.roll_no || it.s.student_code.slice(-6)];
-      subs.forEach(function (es) { var s = it.res.subjects.filter(function (x) { return x.subject_id === es.subject_id; })[0]; if (!s || s.missing) { r.push('', '', ''); return; }
-        r.push(s.parts && s.parts['in'] ? s.parts['in'].grade : '', s.parts && s.parts.th ? s.parts.th.grade : '', s.absent ? 'Ab' : s.grade); });
+      subs.forEach(function (es) { var s = it.res.subjects.filter(function (x) { return x.subject_id === es.subject_id; })[0]; if (!s || s.missing) { r.push('', '', '', '', '', '', ''); return; }
+        var P = s.parts || {}, pi = P['in'], pt = P.th;
+        r.push(pi ? pi.grade : '', pi ? f2(pi.gp) : '', pt ? pt.grade : '', pt ? f2(pt.gp) : '', s.absent ? 'Ab' : s.grade, s.absent ? '' : f2(s.gp), s.rank || ''); });
       return r.concat([it.res.complete ? f2(it.res.gpa) : '', it.res.result, it.rank || '']); });
-    await styledXlsx([{ name: 'Gradewise_Result_Report', title: D.sch.name + ' – ' + ex.name + ' – ' + D.cls.name + ' – Gradewise Result Report', rows: [h1, h2].concat(rows), head: 2, merges: mg, widths: wd, left: [1, 3, 4], grades: true, groups: gr, freezeX: 2 }], D.cls.name + ' - ' + ex.name + ' - Ledger.xlsx');
+    var sr2 = [['Rank', 'Subject', 'Students', 'Class average %', 'Highest %', 'Passed']].concat((D.subjRank || []).map(function (x) { return [x.rank, D.sn[x.id].name, x.n, Math.round(x.avg * 100) / 100, Math.round(x.high * 100) / 100, x.pass + ' / ' + x.n]; }));
+    await styledXlsx([{ name: 'Gradewise_Result_Report', title: D.sch.name + ' – ' + ex.name + ' – ' + D.cls.name + ' – Gradewise Result Report', rows: [h1, h2].concat(rows), head: 2, merges: mg, widths: wd, left: [1, 3, 4], grades: true, groups: gr, freezeX: 2 }, { name: 'Subject Ranking', title: D.sch.name + ' – ' + ex.name + ' – ' + D.cls.name + ' – Subjects ranked by class average', rows: sr2, head: 1, widths: [7, 30, 11, 16, 12, 11], left: [1] }], D.cls.name + ' - ' + ex.name + ' - Ledger.xlsx');
   }
+  A.sheetHtml = sheetHtml; A.SHEET_CSS = CSS; A.loadResults = load;
   V.resultsLedger = async function (el) {
     A.skeleton(el);
     var lk = await A.lookups(true), exams = must(await db.from('exams').select('id,name,exam_type,academic_year').order('created_at'));
