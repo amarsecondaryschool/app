@@ -227,7 +227,7 @@
 
   /* ---------- shell: app bar, content, bottom bar ---------- */
   function showShell() {
-    state.stack = []; hpush();
+    state.stack = []; state.ct = null; hpush();
     root.innerHTML = '<div class="shell"><div id="appbar"></div><div id="content"></div><nav class="bottom" id="nav"></nav></div>';
     renderChrome(); renderContent();
   }
@@ -402,8 +402,9 @@
   var TEACHER = [
     { k: 'my_classes', i: '', view: viewMyClasses },
     { k: 'student_records', i: '', view: function (el) { return viewStudents(el, true); } },
-    { k: 'attendance', i: '', name: 'attendance' },
+    { k: 'attendance', i: '', name: 'attendance', ctOnly: 1 },
     { k: 'marks_entry', i: '', name: 'marksEntry' },
+    { k: 'grade_sheet', i: '', name: 'resultsLedger', ctOnly: 1 },
     { k: 'homework', i: '', name: 'homework' },
     { k: 'class_routine', i: '', name: 'myRoutine' },
     { k: 'notices', i: '', name: 'notices' },
@@ -494,22 +495,42 @@
     var r = await q; if (r.error) throw r.error; return r.count || 0;
   }
 
+  /* Class teacher helpers: a teacher's class-teacher classes, and who the class teachers of a class are */
+  async function ctClasses(force) {
+    if (state.profile.role !== 'teacher') return [];
+    if (state.ct && !force) return state.ct;
+    var ids = [];
+    try { var tr = must(await db.from('teachers').select('id').eq('user_id', state.profile.id).maybeSingle()); if (tr) ids = must(await db.from('class_teachers').select('class_id').eq('teacher_id', tr.id)).map(function (x) { return x.class_id; }); } catch (e) {}
+    state.ct = ids; return ids;
+  }
+  async function classTeachersOf(cid) {
+    try { var r = await db.rpc('class_teacher_list'); if (!r.error && r.data) return r.data.filter(function (x) { return x.class_id === cid; }).map(function (x) { return { id: x.teacher_id, name: x.teacher_name, phone: x.phone }; }); } catch (e) {}
+    try { return must(await db.from('class_teachers').select('teacher_id, teachers(full_name, phone)').eq('class_id', cid)).map(function (x) { return { id: x.teacher_id, name: x.teachers && x.teachers.full_name, phone: x.teachers && x.teachers.phone }; }); } catch (e) { return []; }
+  }
+  function ctBadge(txt) { return '<span class="ctb">★ ' + esc(txt || 'Class Teacher') + '</span>'; }
+
   async function tabHome(el) {
     var p = state.profile;
-    var full = p.role === 'admin' ? ADMIN : p.role === 'teacher' ? TEACHER : PARENT;
+    var full = p.role === 'admin' ? ADMIN : p.role === 'teacher' ? TEACHER : PARENT, ctIds = await ctClasses();
+    full = full.filter(function (f) { return !f.ctOnly || ctIds.length; });
     var rest = full.filter(function (f) { return f.more; }), list = full.filter(function (f) { return !f.more; });
+    var FEAT = p.role === 'admin' ? ['student_records', 'attendance', 'marks_entry'] : p.role === 'teacher' ? (ctIds.length ? ['marks_entry', 'attendance', 'homework'] : ['my_classes', 'marks_entry', 'homework']) : ['attendance', 'examination', 'homework'];
+    var feat = FEAT.map(function (k) { return list.filter(function (f) { return f.k === k; })[0]; }).filter(Boolean);
+    if (feat.length === 3) list = feat.concat(list.filter(function (f) { return feat.indexOf(f) < 0; })); else feat = [];
     if (rest.length) list.push({ k: 'more', i: '⋯', view: function (e) { e.innerHTML = tiles(rest, false); bindTiles(e, rest); } });
-    var search = '';
-    var hr = new Date().getHours(), gr = hr < 12 ? 'Good morning' : (hr < 17 ? 'Good afternoon' : 'Good evening'), tdy = today(), wd = new Date(tdy + 'T00:00:00Z').toLocaleDateString('en-GB', { weekday: 'long', timeZone: 'UTC' }), adTxt = new Date(tdy + 'T00:00:00Z').toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC' });
-    var dbar = '<div class="datebar"><div class="db-l"><small>' + esc(wd) + '</small><b>' + esc(bsLong(tdy) || adTxt) + '</b><span>' + esc(bsLongNe(tdy)) + '</span></div><div class="db-r"><small>' + gr + '</small><b>' + esc((p.full_name || '').split(' ')[0]) + '</b><span>' + esc(adTxt) + '</span></div></div>';
-    el.innerHTML = dbar + '<div id="hdr"></div><div id="info"></div>' + search + '<h4 class="sec">Quick access</h4>' + tiles(list, false) + '<div class="credit"><span>Amar Secondary School</span>Made by Tilak Panday</div>';
+    var tdy = today(), wd = new Date(tdy + 'T00:00:00Z').toLocaleDateString('en-GB', { weekday: 'long', timeZone: 'UTC' }), adTxt = new Date(tdy + 'T00:00:00Z').toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC' });
+    var hol = (window.AMAR.holidaysOn ? window.AMAR.holidaysOn(tdy) : []).map(function (x) { return x.n; });
+    if (new Date(tdy + 'T00:00:00Z').getUTCDay() === 6) hol.unshift('Saturday – weekly holiday');
+    var cn = {}; try { (await lookups()).classes.forEach(function (c) { cn[c.id] = c.name; }); } catch (e) {}
+    var metaChips = '<span class="rolechip">' + esc(roleLabel(p.role)) + '</span>' + (ctIds.length ? ctBadge('Class Teacher · ' + ctIds.map(function (i) { return cn[i] || ''; }).filter(Boolean).join(', ')) : '');
+    var tilesHtml = feat.length ? '<div class="feats">' + feat.map(function (f, i) { return tileHtml(f, i); }).join('') + '</div>' + '<h4 class="sec">More</h4><div class="grid g4">' + list.slice(3).map(function (f, i) { return tileHtml(f, i + 3); }).join('') + '</div>' : tiles(list, false);
+    el.innerHTML = '<div class="hero2"><div class="h2-top"><div class="h2-txt"><span class="hello">Hello <em>· नमस्ते</em></span><h1>' + esc((p.full_name || '').split(' ')[0]) + '</h1><div class="h2-meta">' + metaChips + '</div></div>' + logo(58) + '</div>' +
+      '<div class="h2-date"><b>' + esc(bsLong(tdy) || adTxt) + '</b><span>' + esc(bsLongNe(tdy)) + '</span><em>' + esc(wd) + ', ' + esc(adTxt) + '</em></div>' + (hol.length ? '<div class="h2-hol">🔴 ' + esc(hol.join(' · ')) + '</div>' : '') + '<div id="hdr"></div></div><div id="info"></div>' + tilesHtml + '<div class="credit"><span>Amar Secondary School</span>Made by Tilak Prasad Panday</div>';
     bindTiles(el, list); bindMenuSearch(el);
     var hdr = $('#hdr', el), info = $('#info', el);
 
     if (p.role === 'admin') {
-      hdr.innerHTML = '<div class="hdr"><div class="ph" style="background:#fff">' + logo(80) + '</div>' +
-        '<div class="hn">' + esc(p.full_name) + '</div><div class="hl">' + esc(roleLabel('admin')) + ' | ' + esc(t('id_label')) + ': ' + esc(p.login_id) + '</div>' +
-        '<div class="hstats" id="st"></div></div>';
+      hdr.innerHTML = '<div class="hstats" id="st"></div>';
       var d = must(await db.rpc('dashboard_stats'));
       $('#st', el).innerHTML =
         '<div><b>' + d.students + '</b><span>' + esc(t('total_students')) + '</span></div>' +
@@ -519,9 +540,8 @@
     } else if (p.role === 'teacher') {
       var tr = must(await db.from('teachers').select('id, teacher_code, full_name, photo_url').eq('user_id', p.id).maybeSingle());
       var rows = tr ? must(await db.from('teacher_assignments').select('id, classes(name), sections(name), subjects(name)').eq('teacher_id', tr.id)) : [];
-      hdr.innerHTML = '<div class="hdr"><div class="ph" data-photo="' + esc(tr && tr.photo_url) + '"><span class=\"av\"><svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4.4 3.6-7 8-7s8 2.6 8 7"/></svg></span></div>' +
-        '<div class="hn">' + esc(p.full_name) + '</div><div class="hl">' + esc(t('teacher_id')) + ': ' + esc(p.login_id) + '</div></div>';
-      info.innerHTML = '<div class="info"><h3>' + esc(t('assignments')) + '</h3>' +
+      hdr.innerHTML = '';
+      if (rows.length) info.innerHTML = '<div class="info"><h3>' + esc(t('assignments')) + '</h3>' +
         (rows.length ? rows.map(function (r) {
           return '<span class="chip">' + esc(r.classes ? r.classes.name : '') + (r.sections ? ' ' + esc(r.sections.name) : '') +
             ' · ' + esc(r.subjects ? r.subjects.name : t('none')) + '</span>';
@@ -536,13 +556,10 @@
           return '<option value="' + x.id + '"' + (x.id === state.child ? ' selected' : '') + '>' + esc(x.full_name) + '</option>';
         }).join('') + '</select>';
       }
-      hdr.innerHTML = '<div class="hdr"><div class="ph" data-photo="' + esc(c.photo_url) + '"><span class=\"av\"><svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4.4 3.6-7 8-7s8 2.6 8 7"/></svg></span></div>' +
-        '<div class="hn">' + esc(c.full_name) + '</div>' +
-        '<div class="hl">' + esc(t('class')) + ': ' + esc(c.classes ? c.classes.name : '–') + (c.sections ? ' ' + esc(c.sections.name) : '') +
-        (c.roll_no ? ' | ' + esc(t('roll')) + ' ' + esc(c.roll_no) : '') + '</div>' +
-        '<div class="hl">' + esc(t('regd_no')) + ' ' + esc(c.student_code) + '</div>' + sw + '</div>';
+      hdr.innerHTML = '<div class="chd"><div class="ph" data-photo="' + esc(c.photo_url) + '"><span class="av"><svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4.4 3.6-7 8-7s8 2.6 8 7"/></svg></span></div><div><b>' + esc(c.full_name) + '</b><span>' + esc(t('class')) + ': ' + esc(c.classes ? c.classes.name : '–') + (c.sections ? ' ' + esc(c.sections.name) : '') + (c.roll_no ? ' · ' + esc(t('roll')) + ' ' + esc(c.roll_no) : '') + '</span><span>' + esc(t('regd_no')) + ' ' + esc(c.student_code) + '</span></div></div>' + sw;
+      var cts0 = await classTeachersOf(c.class_id);
       info.innerHTML = '<div class="info"><h3>' + esc(t('additional_info')) + '</h3>' +
-        irow('guardian', c.guardian_name) + irow('contact_no', c.guardian_phone) + irow('address', c.address) +
+        (cts0.length ? '<div class="irow"><span>Class teacher</span><b>' + cts0.map(function (x) { return ctBadge(x.name) + (x.phone ? ' <a href="tel:' + esc(x.phone) + '">' + esc(x.phone) + '</a>' : ''); }).join('<br>') + '</b></div>' : '') + irow('guardian', c.guardian_name) + irow('contact_no', c.guardian_phone) + irow('address', c.address) +
         irow('house', c.house) + irow('blood_group_s', c.blood_group) + irow('emis_no', c.emis_no) + irow('dob', c.dob) + '</div>';
       hydratePhotos(el);
       var swEl = $('[data-child-switch]', el);
@@ -562,7 +579,8 @@
   async function viewMyClasses(el) {
     var tr = must(await db.from('teachers').select('id').eq('user_id', state.profile.id).maybeSingle());
     var rows = tr ? must(await db.from('teacher_assignments').select('id, classes(name), sections(name), subjects(name)').eq('teacher_id', tr.id)) : [];
-    el.innerHTML = assignmentsHtml(rows);
+    var ids = await ctClasses(), cn = {}; (await lookups()).classes.forEach(function (c) { cn[c.id] = c.name; });
+    el.innerHTML = (ids.length ? '<div class="card ctcard"><h4>' + ctBadge('You are the Class Teacher') + '</h4><div>' + ids.map(function (i) { return '<span class="chip">' + esc(cn[i] || '') + '</span>'; }).join('') + '</div><div class="muted sm" style="margin-top:6px">You can take attendance, and view &amp; print the ledger and grade sheets of this class.</div></div>' : '') + assignmentsHtml(rows);
   }
 
   /* ---------- parent views ---------- */
@@ -581,12 +599,14 @@
   async function viewChildTeachers(el) {
     if (!state.child) { el.innerHTML = '<div class="note">' + esc(t('no_child')) + '</div>'; return; }
     var rows = must(await db.rpc('parent_child_teachers', { p_student: state.child }));
-    var ne = state.lang === 'ne';
-    el.innerHTML = rows.length ? rows.map(function (r) {
+    var ne = state.lang === 'ne', ch = currentChild(), cts = ch ? await classTeachersOf(ch.class_id) : [], ctn = {}; cts.forEach(function (x) { ctn[x.name] = x; });
+    var top = cts.map(function (x) { return '<div class="card row ctcard"><div style="flex:1;min-width:0"><h4>' + esc(x.name) + '</h4>' + ctBadge('Class Teacher') + (x.phone ? '<div class="muted sm">' + esc(x.phone) + '</div>' : '') + '</div>' + (x.phone ? '<a class="callbtn" href="tel:' + esc(x.phone) + '">📞</a>' : '') + '</div>'; }).join('');
+    rows = rows.filter(function (r) { return !ctn[r.teacher_name]; });
+    el.innerHTML = top + (rows.length ? rows.map(function (r) {
       var subj = ne ? (r.subject_name_ne || r.subject_name) : r.subject_name;
       return '<div class="card row"><div class="ph sm" data-photo="' + esc(r.photo_path) + '"><span class=\"av\"><svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4.4 3.6-7 8-7s8 2.6 8 7"/></svg></span></div><div><h4>' +
         esc(r.teacher_name) + '</h4>' + (subj ? '<span class="chip">' + esc(subj) + '</span>' : '') + '</div></div>';
-    }).join('') : emptyMsg();
+    }).join('') : (top ? '' : emptyMsg()));
     hydratePhotos(el);
   }
 
@@ -594,13 +614,15 @@
   async function viewClasses(el) {
     var cls = must(await db.from('classes').select('id, name, name_ne, level').order('level'));
     var secs = must(await db.from('sections').select('id, class_id, name').order('name'));
+    var ctl = []; try { ctl = must(await db.rpc('class_teacher_list')); } catch (e) { try { ctl = must(await db.from('class_teachers').select('class_id, teachers(full_name)')).map(function (x) { return { class_id: x.class_id, teacher_name: x.teachers && x.teachers.full_name }; }); } catch (e2) {} }
     var h = '<button class="btn primary" id="addc" style="margin-bottom:12px">＋ ' + esc(t('add_class')) + '</button>';
     if (!cls.length) h += emptyMsg();
     cls.forEach(function (c) {
       var mine = secs.filter(function (s) { return s.class_id === c.id; });
+      var cts1 = ctl.filter(function (x) { return x.class_id === c.id; });
       h += '<div class="card"><div class="row between"><h4>' + esc(c.name) + (c.name_ne ? ' · ' + esc(c.name_ne) : '') + '</h4>' +
         '<button class="btn small" data-sec="' + c.id + '">＋ ' + esc(t('section')) + '</button></div><div>' +
-        (mine.length ? mine.map(function (s) { return '<span class="chip">' + esc(s.name) + '</span>'; }).join('') : '<span class="muted">' + esc(t('no_sections')) + '</span>') + '</div></div>';
+        (mine.length ? mine.map(function (s) { return '<span class="chip">' + esc(s.name) + '</span>'; }).join('') : '<span class="muted">' + esc(t('no_sections')) + '</span>') + '</div>' + (cts1.length ? '<div style="margin-top:8px">' + cts1.map(function (x) { return ctBadge(x.teacher_name); }).join(' ') + '</div>' : '') + '</div>';
     });
     el.innerHTML = h;
     $('#addc', el).onclick = function () {
@@ -1101,7 +1123,7 @@
     db: db, state: state, t: t, sub: sub, esc: esc, $: $, toast: toast, must: must, errText: errText, push: push, pop: pop,
     mountForm: mountForm, emptyMsg: emptyMsg, placeholder: placeholder, logo: logo, photoSrc: photoSrc, hydratePhotos: hydratePhotos,
     uploadPhoto: uploadPhoto, downloadCsv: downloadCsv, count: count, roleLabel: roleLabel, signOut: signOut,
-    currentChild: currentChild, lookups: lookups, nm: nm, today: today, addDays: addDays, fmtMoney: fmtMoney, fmtDate: fmtDate, bs: bs, bsLong: bsLong, bsLongNe: bsLongNe, adOf: adOf, BSN: BSN, bsMlen: bsMlen, ensureBs: ensureBs, bsParts: bsParts, bsMonthInfo: bsMonthInfo, BSM: BSM,
+    currentChild: currentChild, ctClasses: ctClasses, classTeachersOf: classTeachersOf, ctBadge: ctBadge, lookups: lookups, nm: nm, today: today, addDays: addDays, fmtMoney: fmtMoney, fmtDate: fmtDate, bs: bs, bsLong: bsLong, bsLongNe: bsLongNe, adOf: adOf, BSN: BSN, bsMlen: bsMlen, ensureBs: ensureBs, bsParts: bsParts, bsMonthInfo: bsMonthInfo, BSM: BSM,
     loadXlsx: loadXlsx, sheet: sheet, printable: printable, school: school, irow: irow, V: V,
     rerender: function () { renderChrome(); renderContent(); },
     dropSchool: function () { schoolCache = null; },
