@@ -37,13 +37,13 @@
       var ad = A.addDays(info.from, d - 1), wd = (info.wd + d - 1) % 7, isT = cur.y === tp.y && cur.m === tp.m && d === tp.d, h = holidays(cur.y, cur.m, d, ad),
         has = ev.filter(function (e) { return e.event_date <= ad && ad <= (e.end_date || e.event_date); }), pub = h.some(function (x) { return x.h; });
       h.forEach(function (x) { hol.push({ d: d, ad: ad, n: x.n, h: x.h }); });
-      cells += '<button type="button" class="bc-d' + (isT ? ' today' : '') + (wd === 6 ? ' sat' : '') + (pub ? ' hol' : '') + (h.length && !pub ? ' fes' : '') + (has.length ? ' ev' : '') + (pick === ad ? ' pick' : '') + '" data-ad="' + ad + '"><b>' + d + '</b><small>' + (+ad.slice(8)) + '</small>' + (has.length || h.length ? '<i></i>' : '') + '</button>';
+      cells += '<button type="button" class="bc-d' + (isT ? ' today' : '') + (wd === 6 || wd === 0 ? ' sat' : '') + (pub ? ' hol' : '') + (h.length && !pub ? ' fes' : '') + (has.length ? ' ev' : '') + (pick === ad ? ' pick' : '') + '" data-ad="' + ad + '"><b>' + d + '</b><small>' + (+ad.slice(8)) + '</small>' + (has.length || h.length ? '<i></i>' : '') + '</button>';
     }
     var list = ev.filter(function (e) { return e.event_date <= A.addDays(info.from, info.len - 1) && (e.end_date || e.event_date) >= info.from; });
     var a1 = info.from.split('-'), a2 = A.addDays(info.from, info.len - 1).split('-');
     box.innerHTML = '<div class="bc"><div class="bc-h"><button class="bc-n" id="bp">‹</button><div><h3>' + esc(A.BSM[cur.m - 1]) + ' ' + cur.y + '</h3><span>' + NE[cur.m - 1] + ' · ' + AM[+a1[1] - 1] + ' ' + (+a1[2]) + ' – ' + AM[+a2[1] - 1] + ' ' + (+a2[2]) + ', ' + a2[0] + '</span></div><button class="bc-n" id="bn">›</button></div>' +
-      '<div class="bc-w">' + DAYS.map(function (x, k) { return '<div' + (k === 6 ? ' class="sat"' : '') + '>' + x + '</div>'; }).join('') + '</div><div class="bc-g">' + cells + '</div>' +
-      '<div class="bc-key"><span><i class="k1"></i>Holiday</span><span><i class="k2"></i>Festival</span><span><i class="k3"></i>School event</span><span><i class="k4"></i>Saturday</span></div>' +
+      '<div class="bc-w">' + DAYS.map(function (x, k) { return '<div' + (k === 6 || k === 0 ? ' class="sat"' : '') + '>' + x + '</div>'; }).join('') + '</div><div class="bc-g">' + cells + '</div>' +
+      '<div class="bc-key"><span><i class="k1"></i>Holiday</span><span><i class="k2"></i>Festival</span><span><i class="k3"></i>School event</span><span><i class="k4"></i>Sat &amp; Sun</span></div>' +
       '<div id="bsel"></div>' +
       '<button class="btn small" id="bt" style="margin-top:10px">Today</button>' +
       (hol.length ? '<div class="bc-hl"><h4>Holidays &amp; festivals</h4>' + hol.map(function (x) { return '<div class="' + (x.h ? 'h' : 'f') + '"><b>' + x.d + '</b><span>' + esc(x.n) + '</span><em>' + new Date(x.ad + 'T00:00:00Z').toLocaleDateString('en-GB', { weekday: 'short', timeZone: 'UTC' }) + '</em></div>'; }).join('') + '</div>' : '') +
@@ -51,7 +51,7 @@
     function show(ad) {
       var p = A.bsParts(ad), h = A.holidaysOn(ad), wd = new Date(ad + 'T00:00:00Z').getUTCDay(), evs = ev.filter(function (e) { return e.event_date <= ad && ad <= (e.end_date || e.event_date); });
       var lines = h.map(function (x) { return '<div class="' + (x.h ? 'h' : 'f') + '">' + (x.h ? '🔴 ' : '🟠 ') + esc(x.n) + '</div>'; }).concat(evs.map(function (e) { return '<div class="e">📌 ' + esc(e.title) + '</div>'; }));
-      if (wd === 6) lines.unshift('<div class="h">🔴 Saturday – weekly holiday</div>');
+      if (wd === 6 || wd === 0) lines.unshift('<div class="h">🔴 ' + (wd === 6 ? 'Saturday' : 'Sunday') + ' – weekly holiday</div>');
       $('#bsel', box).innerHTML = '<div class="bc-sel"><b>' + p.d + ' ' + esc(A.BSM[p.m - 1]) + ' ' + p.y + ' · ' + esc(A.bsLongNe(ad)) + '</b><small>' + new Date(ad + 'T00:00:00Z').toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric', timeZone: 'UTC' }) + '</small>' + (lines.join('') || '<div class="muted sm">Normal school day</div>') + '</div>';
     }
     box.querySelectorAll('.bc-d').forEach(function (b) { b.onclick = function () { pick = b.getAttribute('data-ad'); box.querySelectorAll('.bc-d.pick').forEach(function (x) { x.classList.remove('pick'); }); b.classList.add('pick'); show(pick); }; });
