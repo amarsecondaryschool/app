@@ -529,7 +529,7 @@
       var by = {}; rows.forEach(function (r) { var k = r.exams ? A.nm(r.exams) : '?'; (by[k] = by[k] || []).push(r); });
       body.innerHTML = Object.keys(by).length ? Object.keys(by).map(function (k) {
         return '<h3 class="grp g-orange"><i></i>' + esc(k) + '</h3>' + by[k].map(function (r) {
-          return '<div class="card cal-day k-exam"><div class="d"><b>' + esc(r.exam_date.slice(8)) + '</b>' + esc(dayName(weekday(r.exam_date)).slice(0, 3)) + '</div><div><h4>' + esc(lk.sub[r.subject_id] ? A.nm(lk.sub[r.subject_id]) : '') + '</h4><div class="muted xs">' + esc(A.fmtDate(r.exam_date)) + (r.start_time ? ' · ' + esc(r.start_time.slice(0, 5)) : '') + '</div></div></div>';
+          return '<div class="card cal-day k-exam"><div class="d"><b>' + esc(String((A.bsParts(r.exam_date)||{d:r.exam_date.slice(8)}).d)) + '</b>' + esc(dayName(weekday(r.exam_date)).slice(0, 3)) + '</div><div><h4>' + esc(lk.sub[r.subject_id] ? A.nm(lk.sub[r.subject_id]) : '') + '</h4><div class="muted xs">' + esc(A.fmtDate(r.exam_date)) + (r.start_time ? ' · ' + esc(r.start_time.slice(0, 5)) : '') + '</div></div></div>';
         }).join('');
       }).join('') : A.emptyMsg('no_exam_dates');
     }
@@ -557,9 +557,10 @@
         (role === 'admin' ? '<button class="btn primary mb" id="cadd">＋ ' + esc(t('add_event')) + '</button>' : '');
       var lastMonth = '';
       list.forEach(function (e) {
-        var m = e.event_date.slice(0, 7);
+        var bp = A.bsParts(e.event_date), m = bp ? bp.y + ' ' + A.BSM[bp.m - 1] : e.event_date.slice(0, 7);
+        e.kind = e.kind || 'event';
         if (m !== lastMonth) { html += '<h3 class="grp g-blue"><i></i>' + esc(m) + '</h3>'; lastMonth = m; }
-        html += '<div class="card tap cal-day k-' + e.kind + '" data-id="' + e.id + '"><div class="d"><b>' + esc(e.event_date.slice(8)) + '</b>' + esc(dayName(weekday(e.event_date)).slice(0, 3)) + '</div><div style="flex:1"><h4>' + KIND_ICON[e.kind] + ' ' +
+        html += '<div class="card tap cal-day k-' + e.kind + '" data-id="' + e.id + '"><div class="d"><b>' + esc(String((A.bsParts(e.event_date)||{d:e.event_date.slice(8)}).d)) + '</b>' + esc(dayName(weekday(e.event_date)).slice(0, 3)) + '</div><div style="flex:1"><h4>' + KIND_ICON[e.kind] + ' ' +
           esc(state.lang === 'ne' && e.title_ne ? e.title_ne : e.title) + '</h4><div class="muted xs">' + esc(A.fmtDate(e.event_date)) + (e.end_date ? ' → ' + esc(A.fmtDate(e.end_date)) : '') + '</div>' +
           '<span class="chip">' + esc(t('ev_' + e.kind)) + '</span>' + (e.notes ? '<div class="muted sm">' + esc(e.notes) + '</div>' : '') + '</div></div>';
       });
@@ -604,7 +605,7 @@
       async function draw() {
         var rows = tr ? must(await db.from('leave_applications').select('*').eq('teacher_id', tr.id).order('from_date', { ascending: false })) : [];
         el.innerHTML = '<button class="btn primary mb" id="ladd">＋ ' + esc(t('apply_leave')) + '</button>' + (rows.length ? rows.map(function (r) {
-          return '<div class="card"><div class="row between"><h4>' + esc(r.from_date) + ' → ' + esc(r.to_date) + '</h4>' + leaveChip(r.status) + '</div><div class="muted sm">' + esc(r.reason || '') + '</div></div>';
+          return '<div class="card"><div class="row between"><h4>' + esc(A.fmtDate(r.from_date)) + ' → ' + esc(A.fmtDate(r.to_date)) + '</h4>' + leaveChip(r.status) + '</div><div class="muted sm">' + esc(r.reason || '') + '</div></div>';
         }).join('') : A.emptyMsg());
         $('#ladd', el).onclick = function () {
           A.push({ title: function () { return t('apply_leave'); }, render: function (e) {
@@ -624,7 +625,7 @@
       var rows = must(await db.from('leave_applications').select('*, teachers(full_name)').order('created_at', { ascending: false }).limit(100));
       var list = rows.filter(function (r) { return mode === 'all' || r.status === 'pending'; });
       el.innerHTML = '<div class="tabs">' + ['pending', 'all'].map(function (m) { return '<button data-m="' + m + '" class="' + (m === mode ? 'on' : '') + '">' + esc(t('lv_' + m)) + '</button>'; }).join('') + '</div>' + (list.length ? list.map(function (r) {
-        return '<div class="card"><div class="row between"><h4>' + esc(r.teachers ? r.teachers.full_name : '') + '</h4>' + leaveChip(r.status) + '</div><div class="muted xs">' + esc(r.from_date) + ' → ' + esc(r.to_date) + '</div><div class="sm">' + esc(r.reason || '') + '</div>' +
+        return '<div class="card"><div class="row between"><h4>' + esc(r.teachers ? r.teachers.full_name : '') + '</h4>' + leaveChip(r.status) + '</div><div class="muted xs">' + esc(A.fmtDate(r.from_date)) + ' → ' + esc(A.fmtDate(r.to_date)) + '</div><div class="sm">' + esc(r.reason || '') + '</div>' +
           (r.status === 'pending' ? '<div class="row mt"><button class="btn small green" data-a="' + r.id + '" data-s="approved">✓ ' + esc(t('approve')) + '</button><button class="btn small danger" data-a="' + r.id + '" data-s="rejected">✕ ' + esc(t('reject')) + '</button></div>' : '') + '</div>';
       }).join('') : A.emptyMsg());
       el.querySelectorAll('.tabs button').forEach(function (b) { b.onclick = function () { mode = b.getAttribute('data-m'); drawA(); }; });
