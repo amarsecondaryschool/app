@@ -128,6 +128,10 @@
   V.resultsLedger = async function (el) {
     A.skeleton(el);
     var lk = await A.lookups(true), exams = must(await db.from('exams').select('id,name,exam_type,academic_year').order('created_at'));
+    if (A.state.profile.role === 'teacher') {   // class teachers: view and print only, for their own class
+      var mine = await A.ctClasses(); lk = Object.assign({}, lk, { classes: lk.classes.filter(function (c) { return mine.indexOf(c.id) >= 0; }) });
+      if (!lk.classes.length) { el.innerHTML = '<div class="empty">Only the class teacher can open the ledger and grade sheets of a class.</div>'; return; }
+    }
     if (!exams.length || !lk.classes.length) { el.innerHTML = '<div class="empty">Open “Marks entry” once first (it creates the exams and subjects), and add classes.</div>'; return; }
     el.innerHTML = '<div class="note">Pick an exam and a class. You can <b>print the grade sheets</b> (one page per student) or <b>download the ledger</b> (whole class in one Excel/CSV file).</div><select id="rx" class="search">' + exams.map(function (e) { return '<option value="' + e.id + '">' + esc(e.name) + '</option>'; }).join('') + '</select><select id="rc" class="search">' + lk.classes.map(function (c) { return '<option value="' + c.id + '">' + esc(A.nm(c)) + '</option>'; }).join('') + '</select><div id="ro"></div>';
     async function draw() {
