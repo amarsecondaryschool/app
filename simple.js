@@ -129,6 +129,7 @@
 
   /* ----- Marks entry: just Exam, Class, Subject (compulsory subjects + Optional I + Optional II) ----- */
   var PRI = ['English', 'Nepali', 'Mathematics', 'Science and Technology', 'Social Studies'];
+  A.prepareMarks = prepare;
   V.marksEntry = async function (el) {
     A.skeleton(el);
     try { await prepare(); } catch (e) { toast(A.errText(e), true); }
@@ -148,6 +149,7 @@
     async function fillSubjects() {
       var cid = $('#mc', el).value, cs = (await loadCS()).filter(function (r) { return r.class_id === cid; }), al = await allowed(cid);
       function ok(r) { return !al || al[r.subject_id]; }
+      if (al) { var have = {}; cs.forEach(function (r) { have[r.subject_id] = 1; }); Object.keys(al).forEach(function (k) { if (!have[k] && sub[k]) cs.push({ class_id: cid, subject_id: k, is_compulsory: true, opt_slot: null }); }); }   // a subject the routine gives this teacher always shows up
       var comp = cs.filter(function (r) { return r.is_compulsory && ok(r); }).sort(function (a, b) { var x = PRI.indexOf(sub[a.subject_id].name), y = PRI.indexOf(sub[b.subject_id].name); return (x < 0 ? 99 : x) - (y < 0 ? 99 : y) || (sub[a.subject_id].name < sub[b.subject_id].name ? -1 : 1); });
       var o1 = cs.filter(function (r) { return !r.is_compulsory && (r.opt_slot === 2 ? 2 : 1) === 1 && ok(r); }).length, o2 = cs.filter(function (r) { return !r.is_compulsory && r.opt_slot === 2 && ok(r); }).length;
       $('#ms', el).innerHTML = opts(comp, function (r) { return '<option value="' + r.subject_id + '">' + esc(A.nm(sub[r.subject_id])) + '</option>'; }) + (o1 ? '<option value="o1">Optional I</option>' : '') + (o2 ? '<option value="o2">Optional II</option>' : '');
@@ -161,7 +163,7 @@
         var isOpt = v === 'o1' || v === 'o2', slot = v === 'o1' ? 1 : 2, st = await students(cid), cs = (await loadCS()).filter(function (r) { return r.class_id === cid; }), al = await allowed(cid);
         var ids = isOpt ? cs.filter(function (r) { return !r.is_compulsory && (r.opt_slot === 2 ? 2 : 1) === slot && (!al || al[r.subject_id]); }).map(function (r) { return r.subject_id; }) : [v];
         var ess = must(await db.from('exam_subjects').select('*').eq('exam_id', ex.id).eq('class_id', cid).in('subject_id', ids));
-        if (!ess.length && !admin) { box.innerHTML = '<div class="empty">Marks setup is not ready yet. Ask the admin to open Marks entry once.</div>'; return; }
+        if (!ess.length && !admin) { box.innerHTML = '<div class="empty">Marks setup for this subject is not ready yet. Ask the admin to open Marks entry once (or re-save the class routine).</div>'; return; }
         if (!ess.length) { must(await db.from('exam_subjects').insert(ids.map(function (i) { return { exam_id: ex.id, class_id: cid, subject_id: i, theory_marks: 100, practical_marks: 0, internal_marks: 0, pass_marks: 0, credit_hours: 4 }; }))); ess = must(await db.from('exam_subjects').select('*').eq('exam_id', ex.id).eq('class_id', cid).in('subject_id', ids)); }
         var es0 = ess[0], sid = st.map(function (x) { return x.id; }), so = {}, mk = {};
         if (isOpt && sid.length) must(await db.from('student_optionals').select('student_id,subject_id').eq('slot', slot).in('student_id', sid)).forEach(function (r) { so[r.student_id] = r.subject_id; });
