@@ -28,7 +28,11 @@
   }
   async function loadCS() { var r = await db.from('class_subjects').select('class_id,subject_id,is_compulsory,opt_slot,theory_marks,internal_marks,credit_hours'); if (r.error) r = await db.from('class_subjects').select('class_id,subject_id,is_compulsory,opt_slot'); return must(r); }
   var CORE5B = ['Nepali', 'English', 'Mathematics', 'Science and Technology'];
-  function dflt(l, n) { var b = l >= 4 && l <= 10; return { th: b ? 75 : 100, inn: b ? 25 : 0, ch: b ? (CORE5B.indexOf(n) >= 0 ? 5 : 4) : 4 }; }
+  /* ECD / PPC / Nursery / KG / PG classes have no credit hours (GPA = average of grade points). Their class levels are remembered here. */
+  var EARLY_RE = /(^|[^a-z])(ecd|ppc|pp\s*-?\s*\d?|nursery|l\.?kg|u\.?kg|kg|pg|play\s*group|playgroup|prep|pre[-\s]?primary|montessori)([^a-z]|$)/i;
+  window.AMAR_EARLY = window.AMAR_EARLY || {};
+  var oLk = A.lookups; A.lookups = async function () { var r = await oLk.apply(this, arguments); try { r.classes.forEach(function (c) { if (EARLY_RE.test(c.name || '') || +c.level <= 0) window.AMAR_EARLY[c.level] = 1; }); } catch (e) {} return r; };
+  function dflt(l, n) { var b = l >= 4 && l <= 10; return { th: b ? 75 : 100, inn: b ? 25 : 0, ch: window.AMAR_EARLY[l] ? 0 : (b ? (CORE5B.indexOf(n) >= 0 ? 5 : 4) : 4) }; }
   async function syncExam(cid, sid, th, inn, ch) {   // push new marks / credit hours to this class+subject in every unpublished exam
     var ex = must(await db.from('exams').select('id,name,exam_type,status')).filter(function (e) { return e.status !== 'published'; });
     for (var i = 0; i < ex.length; i++) { var mid = isMid(ex[i]); await db.from('exam_subjects').update({ theory_marks: mid ? th + inn : th, internal_marks: mid ? 0 : inn, credit_hours: mid ? ch / 2 : ch }).eq('exam_id', ex[i].id).eq('class_id', cid).eq('subject_id', sid); }
