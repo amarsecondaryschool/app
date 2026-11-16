@@ -63,10 +63,13 @@
     if (!lk.classes.length) { el.innerHTML = '<div class="empty">Add classes first (Menu → Import/Export, or Classes).</div>'; return; }
     el.innerHTML = '<div class="note">Pick a class. For each subject choose <b>Compulsory</b>, <b>Optional I</b>, <b>Optional II</b> or <b>Not taught</b>. Marks entry uses this list: all compulsory subjects, plus Optional I and Optional II (each student picks one subject in each). These are the usual Nepal (CDC / NEB) subjects – change anything to match your school.</div>' +
       '<select id="cs" class="search">' + lk.classes.map(function (c) { return '<option value="' + c.id + '">' + esc(A.nm(c)) + '</option>'; }).join('') + '</select><div id="cl"></div>';
-    async function draw() {
+    var ordFor = '', ord = null;
+    async function draw(keep) {
       var cid = $('#cs', el).value, cs = await loadCS(), mine = {}, csm = {}; cs.filter(function (r) { return r.class_id === cid; }).forEach(function (r) { csm[r.subject_id] = r; }); cs.filter(function (r) { return r.class_id === cid; }).forEach(function (r) { mine[r.subject_id] = r.is_compulsory ? 'c' : (r.opt_slot === 2 ? 'o2' : 'o1'); });
       var subs = lk.subjects.slice().sort(function (a, b) { return (mine[b.id] ? 1 : 0) - (mine[a.id] ? 1 : 0) || (mine[a.id] === 'c' ? -1 : 0) - (mine[b.id] === 'c' ? -1 : 0); });
-      $('#cl', el).innerHTML = subs.map(function (s) { var v = mine[s.id] || 'n', cl0 = lk.classes.filter(function (c) { return c.id === cid; })[0], d = dflt(cl0.level, s.name), q = csm[s.id] || {};
+      if (keep === true && ordFor === cid && ord) subs.sort(function (a, b) { return ord.indexOf(a.id) - ord.indexOf(b.id); }); else { ordFor = cid; ord = subs.map(function (x) { return x.id; }); }   // rows keep their place while you edit
+      var cname = A.nm(lk.classes.filter(function (c) { return c.id === cid; })[0] || {});
+      $('#cl', el).innerHTML = '<div class="card" style="background:#eaf4ff;border:1px solid #cfe2f7"><b>Editing: ' + esc(cname) + '</b><div class="muted sm">Changes below apply to this class only.</div></div>' + subs.map(function (s) { var v = mine[s.id] || 'n', cl0 = lk.classes.filter(function (c) { return c.id === cid; })[0], d = dflt(cl0.level, s.name), q = csm[s.id] || {};
         function nv(x, y) { return x != null ? x : y; }
         return '<div class="card"><div class="row between"><b style="flex:1">' + esc(A.nm(s)) + '</b><select data-s="' + s.id + '" class="mini-sel"><option value="c"' + (v === 'c' ? ' selected' : '') + '>Compulsory</option><option value="o1"' + (v === 'o1' ? ' selected' : '') + '>Optional I</option><option value="o2"' + (v === 'o2' ? ' selected' : '') + '>Optional II</option><option value="n"' + (v === 'n' ? ' selected' : '') + '>Not taught</option></select><button class="btn small danger" data-ds="' + s.id + '" style="margin-left:6px"></button></div>' +
           (v === 'n' ? '' : '<div class="mrow"><label>Theory marks<input type="number" data-f="' + s.id + '" value="' + nv(q.theory_marks, d.th) + '"></label><label>Internal marks<input type="number" data-f="' + s.id + '" value="' + nv(q.internal_marks, d.inn) + '"></label><label>Credit hours<input type="number" step="0.25" data-f="' + s.id + '" value="' + nv(q.credit_hours, d.ch) + '"></label></div>') + '</div>'; }).join('') +
@@ -76,16 +79,16 @@
         try { var sid = sel.getAttribute('data-s');
           if (sel.value === 'n') must(await db.from('class_subjects').delete().eq('class_id', cid).eq('subject_id', sid));
           else must(await db.from('class_subjects').upsert({ class_id: cid, subject_id: sid, is_compulsory: sel.value === 'c', opt_slot: sel.value === 'o2' ? 2 : (sel.value === 'o1' ? 1 : null) }, { onConflict: 'class_id,subject_id' }));
-          toast('✓ ' + 'Saved'); } catch (e) { toast(A.errText(e), true); } }; });
+          toast('✓ Saved for ' + cname + ' only'); draw(true); } catch (e) { toast(A.errText(e), true); } }; });
       $('#nsb', el).onclick = async function () { var n = $('#ns', el).value.trim(); if (!n) return;
         try { var sch = await A.school(); must(await db.from('subjects').upsert({ school_id: sch.id, name: n }, { onConflict: 'school_id,name' })); lk = await A.lookups(true); draw(); } catch (e) { toast(A.errText(e), true); } };
       el.querySelectorAll('[data-f]').forEach(function (inp) { inp.onchange = async function () { try {
         var sid = inp.getAttribute('data-f'), v3 = Array.prototype.map.call(el.querySelectorAll('[data-f="' + sid + '"]'), function (x) { return +x.value || 0; });
         must(await db.from('class_subjects').update({ theory_marks: v3[0], internal_marks: v3[1], credit_hours: v3[2] }).eq('class_id', cid).eq('subject_id', sid));
-        await syncExam(cid, sid, v3[0], v3[1], v3[2]); toast('✓ Saved'); } catch (e) { toast(A.errText(e), true); } }; });
-      el.querySelectorAll('[data-ds]').forEach(function (b) { b.onclick = async function () { if (!confirm('Delete this subject from the whole school?')) return;
+        await syncExam(cid, sid, v3[0], v3[1], v3[2]); toast('✓ Saved for ' + cname + ' only'); } catch (e) { toast(A.errText(e), true); } }; });
+      el.querySelectorAll('[data-ds]').forEach(function (b) { b.onclick = async function () { if (!confirm('Delete this subject from ALL classes in the whole school? (To remove it from this class only, set it to Not taught.)')) return;
         try { must(await db.from('subjects').delete().eq('id', b.getAttribute('data-ds'))); lk = await A.lookups(true); draw(); } catch (e) { toast(A.errText(e), true); } }; });
-      $('#cpy', el).onclick = async function () { if (!confirm('Copy Compulsory / Optional I / Optional II of this class to ALL other classes?')) return;
+      $('#cpy', el).onclick = async function () { if (!confirm('This will REPLACE the subjects of EVERY other class with the setup of ' + cname + '. Continue?')) return;
         try { var rows = (await loadCS()).filter(function (r) { return r.class_id === cid; }), others = lk.classes.filter(function (c) { return c.id !== cid; });
           must(await db.from('class_subjects').delete().in('class_id', others.map(function (c) { return c.id; }))); var out = [];
           others.forEach(function (c) { rows.forEach(function (r) { out.push({ class_id: c.id, subject_id: r.subject_id, is_compulsory: r.is_compulsory, opt_slot: r.opt_slot, theory_marks: r.theory_marks, internal_marks: r.internal_marks, credit_hours: r.credit_hours }); }); });
@@ -93,7 +96,7 @@
       $('#rs', el).onclick = async function () { if (!confirm('Reset subjects of this class to the Nepal defaults?')) return;
         try { await ensureDefaults(cid, true); draw(); } catch (e) { toast(A.errText(e), true); } };
     }
-    $('#cs', el).onchange = draw; draw();
+    $('#cs', el).onchange = function () { draw(); }; draw();
   };
 
   /* ----- Marks entry: make sure exams and subject setup exist (Nepal credit hours), then open the normal screen ----- */
