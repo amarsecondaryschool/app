@@ -579,6 +579,14 @@ h2,h3,h4 { color:var(--ink); }
 .tn { font-style:normal; font-size:11px; font-weight:700; color:#1c6fa8; }
 .rl i { white-space:normal; }
 
+/* simpler hero */
+.hero2 { padding:20px 18px 18px !important; }
+.hero2 .h2-date { margin-top:14px; padding-top:0; border-top:0; align-items:center; }
+.hero2 .h2-date b { font-size:16px; } .hero2 .h2-date span { background:rgba(255,255,255,.18); padding:3px 10px; border-radius:999px; font-size:12px; font-weight:700; opacity:1; }
+.hero2 .chd { background:rgba(255,255,255,.16); backdrop-filter:blur(4px); }
+.hero2 .chd b { font-size:17px; } .hero2 .chd span { font-size:13px; }
+.info { padding:12px 14px !important; margin:0 0 12px; }
+
 /* BS-only date field */
 input.bs-hid { position:absolute !important; opacity:0 !important; pointer-events:none !important; width:1px !important; height:1px !important; margin:0 !important; padding:0 !important; border:0 !important; }
 .bsfield { width:100%; text-align:left; cursor:pointer; min-height:48px; margin:2px 0 6px !important; font:inherit; background:#fff !important; border:1.5px solid #cfe0f2 !important; border-radius:14px !important; padding:8px 8px 8px 14px !important; }
@@ -615,4 +623,4 @@ input.bs-hid { position:absolute !important; opacity:0 !important; pointer-event
 .bc-sel, .bc-hl { clear:both; }
 .ctb.sm { font-size:10.5px; padding:3px 9px; margin-right:6px; white-space:nowrap; }
 .appbar .ctb { flex:none; }
-:root { --ver:23; }
+:root { --ver:24; }
