@@ -610,6 +610,10 @@ h2,h3,h4 { color:var(--ink); }
 .info.prof .irow > span { text-align:left !important; } .info.prof .irow > b { text-align:left !important; display:block; }
 .info.prof .irow > b .chip { display:inline-block; margin:0 6px 6px 0; }
 
+.prof-hdr { padding:26px 16px 22px !important; }
+.info.prof .irow > b .chip { text-align:left !important; padding:6px 12px; font-size:13px; border-radius:999px; background:#e8f2fc; color:#1b4f7a; font-weight:600; }
+.info.prof .irow > span { flex:0 0 30%; }
+
 /* simple polished buttons, a little bigger */
 .grid { gap:14px !important; }
 .grid .tile { min-height:138px !important; height:138px; background:#fff !important; border:1px solid #e4ecf6 !important; border-radius:24px !important; box-shadow:0 1px 2px rgba(19,41,75,.05),0 8px 18px -6px rgba(19,41,75,.14) !important; padding:18px 6px 10px !important; gap:12px !important; transition:transform .1s; }
@@ -665,4 +669,4 @@ input.bs-hid { position:absolute !important; opacity:0 !important; pointer-event
 .bc-sel, .bc-hl { clear:both; }
 .ctb.sm { font-size:10.5px; padding:3px 9px; margin-right:6px; white-space:nowrap; }
 .appbar .ctb { flex:none; }
-:root { --ver:27; }
+:root { --ver:28; }
