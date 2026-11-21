@@ -120,9 +120,35 @@
     if (role === 'parent') return attParent(el);
     var list = [{ label: 'att_mark', render: attMark }, { label: 'att_reports', render: attReports }];
     if (role === 'admin') list.push({ label: 'att_staff', render: attStaff });
+    list.push({ label: 'Exam record', render: attExam });
     tabs(el, list);
   };
 
+  /* Exam attendance record: total school days after the previous exam + days each student was present (printed on the grade sheet) */
+  async function attExam(box) {
+    var choices = await attChoices(), seen = {}, cl = [];
+    choices.forEach(function (c) { if (!seen[c.class_id]) { seen[c.class_id] = 1; cl.push({ id: c.class_id, label: c.label.replace(/ – .*$/, '') }); } });
+    if (!cl.length) { box.innerHTML = A.emptyMsg('no_classes_assigned'); return; }
+    var exams = must(await db.from('exams').select('id,name,academic_year').order('created_at', { ascending: false }));
+    if (!exams.length) { box.innerHTML = '<div class="empty">Create an exam first.</div>'; return; }
+    box.innerHTML = '<p class="muted sm">Set how many days the school was open after the previous exam and how many days each student attended. This prints at the bottom of the grade sheet.</p><div class="filters"><select id="xe">' + exams.map(function (e) { return '<option value="' + e.id + '">' + esc(e.name + (e.academic_year ? ' ' + e.academic_year : '')) + '</option>'; }).join('') + '</select><select id="xc">' + cl.map(function (c) { return '<option value="' + c.id + '">' + esc(c.label) + '</option>'; }).join('') + '</select></div><div id="xl"></div>';
+    async function draw() {
+      var eid = $('#xe', box).value, cid = $('#xc', box).value, xl = $('#xl', box); xl.innerHTML = '<div class="skel"></div>';
+      var studs = must(await db.from('students').select('id,full_name,roll_no').eq('class_id', cid).eq('status', 'active').order('roll_no').order('full_name')), sd = null, by = {};
+      try { sd = must(await db.from('exam_school_days').select('total_days').eq('exam_id', eid).eq('class_id', cid).maybeSingle()); must(await db.from('exam_attendance').select('student_id,present_days').eq('exam_id', eid).in('student_id', studs.map(function (s) { return s.id; }))).forEach(function (r) { by[r.student_id] = r.present_days; }); }
+      catch (e) { xl.innerHTML = '<p class="err">' + esc(A.errText(e)) + '<br>Run SQL step 17 in Supabase first.</p>'; return; }
+      xl.innerHTML = '<div class="card"><label><b>Total school days (open after previous exam)</b></label><input type="number" id="xt" min="0" inputmode="numeric" value="' + (sd ? sd.total_days : '') + '" placeholder="e.g. 78"></div>' +
+        '<div class="card">' + (studs.length ? studs.map(function (s) { return '<div class="row between" style="padding:6px 0;border-bottom:1px solid #e9eff6"><span>' + esc(s.roll_no || '') + ' &nbsp; <b>' + esc(s.full_name) + '</b></span><input type="number" min="0" step="0.5" inputmode="decimal" data-s="' + s.id + '" value="' + (by[s.id] != null ? by[s.id] : '') + '" placeholder="days" style="width:80px;text-align:center"></div>'; }).join('') : A.emptyMsg('')) + '</div>' +
+        '<div class="row" style="gap:8px"><button class="btn" id="xall">Set all = total days</button><button class="btn primary" id="xs">Save</button></div>';
+      $('#xall', box).onclick = function () { var v = $('#xt', box).value; box.querySelectorAll('input[data-s]').forEach(function (i) { i.value = v; }); };
+      $('#xs', box).onclick = async function () {
+        var total = parseInt($('#xt', box).value, 10); if (isNaN(total) || total < 0) { toast('Enter total school days', true); return; }
+        var rows = []; box.querySelectorAll('input[data-s]').forEach(function (i) { if (i.value !== '') rows.push({ exam_id: eid, student_id: i.getAttribute('data-s'), present_days: Math.min(+i.value, total), updated_at: new Date().toISOString() }); });
+        try { must(await db.from('exam_school_days').upsert({ exam_id: eid, class_id: cid, total_days: total, updated_at: new Date().toISOString() }, { onConflict: 'exam_id,class_id' })); if (rows.length) must(await db.from('exam_attendance').upsert(rows, { onConflict: 'exam_id,student_id' })); toast('✓ Saved'); } catch (e) { toast(A.errText(e), true); }
+      };
+    }
+    $('#xe', box).onchange = draw; $('#xc', box).onchange = draw; draw();
+  }
   async function attMark(box) {
     var choices = await attChoices();
     if (!choices.length) { box.innerHTML = A.emptyMsg('no_classes_assigned'); return; }
@@ -685,10 +711,10 @@
     el.innerHTML = '<div class="card"><h4>' + esc(t('school_fixed')) + '</h4><div class="muted">' + A.SCHOOL + '</div></div>' +
       '<div class="tabs"><button class="on">' + esc(t('school_profile')) + '</button></div><div id="sform"></div>' +
       '<button class="btn mb" id="grbtn">🏅 ' + esc(t('grading_rules')) + '</button><button class="btn mb" id="pwbtn">🔒 ' + esc(t('change_password')) + '</button><div class="card"><h4>' + esc(t('backup_title')) + '</h4><p class="muted sm">' + esc(t('backup_text')) + '</p><button class="btn small" id="bkbtn">📥 ' + esc(t('import_export')) + '</button></div>';
-    A.mountForm($('#sform', el), { fields: [{ name: 'address', label: 'address' }, { name: 'phone', label: 'phone' }, { name: 'email', label: 'email' }, { name: 'principal_name', label: 'principal_name' },
+    A.mountForm($('#sform', el), { fields: [{ name: 'motto', label: 'Motto (printed above the school name on grade sheets)' }, { name: 'address', label: 'address' }, { name: 'phone', label: 'phone' }, { name: 'email', label: 'email' }, { name: 'principal_name', label: 'principal_name' },
       { name: 'inactivity_timeout_minutes', label: 'timeout_info', type: 'number' }], values: sch, onSubmit: async function (v) {
         if (v.inactivity_timeout_minutes !== null && (v.inactivity_timeout_minutes < 1 || v.inactivity_timeout_minutes > 240)) throw new Error('1 - 240');
-        must(await db.from('schools').update({ address: v.address, phone: v.phone, email: v.email, principal_name: v.principal_name, inactivity_timeout_minutes: v.inactivity_timeout_minutes || 15 }).eq('id', sch.id));
+        var up = { address: v.address, phone: v.phone, email: v.email, principal_name: v.principal_name, inactivity_timeout_minutes: v.inactivity_timeout_minutes || 15 }; var r1 = await db.from('schools').update(Object.assign({ motto: v.motto || null }, up)).eq('id', sch.id); if (r1.error) { if (/motto/i.test(r1.error.message || '')) { must(await db.from('schools').update(up).eq('id', sch.id)); toast('Saved, but the motto needs SQL step 17 to be run first', true); } else throw r1.error; }
         A.dropSchool(); state.timeoutMin = v.inactivity_timeout_minutes || 15; toast(t('saved')); $('#sform', el).querySelector('button[type=submit]').disabled = false;
       } });
     $('#grbtn', el).onclick = function () { A.push({ title: function () { return t('grading_rules'); }, render: A.V('gradingRules') }); };
