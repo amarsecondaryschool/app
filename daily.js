@@ -710,6 +710,7 @@
     var sch = await A.school();
     el.innerHTML = '<div class="card"><h4>' + esc(t('school_fixed')) + '</h4><div class="muted">' + A.SCHOOL + '</div></div>' +
       '<div class="tabs"><button class="on">' + esc(t('school_profile')) + '</button></div><div id="sform"></div>' +
+      '<div class="card" id="evc"><h4>📧 E-mail login code</h4><div class="muted sm" id="evs">Loading…</div></div>' +
       '<button class="btn mb" id="grbtn">🏅 ' + esc(t('grading_rules')) + '</button><button class="btn mb" id="pwbtn">🔒 ' + esc(t('change_password')) + '</button><div class="card"><h4>' + esc(t('backup_title')) + '</h4><p class="muted sm">' + esc(t('backup_text')) + '</p><button class="btn small" id="bkbtn">📥 ' + esc(t('import_export')) + '</button></div>';
     A.mountForm($('#sform', el), { fields: [{ name: 'motto', label: 'Motto (printed above the school name on grade sheets)' }, { name: 'address', label: 'address' }, { name: 'phone', label: 'phone' }, { name: 'email', label: 'email' }, { name: 'principal_name', label: 'principal_name' },
       { name: 'inactivity_timeout_minutes', label: 'timeout_info', type: 'number' }], values: sch, onSubmit: async function (v) {
@@ -717,6 +718,26 @@
         var up = { address: v.address, phone: v.phone, email: v.email, principal_name: v.principal_name, inactivity_timeout_minutes: v.inactivity_timeout_minutes || 15 }; var r1 = await db.from('schools').update(Object.assign({ motto: v.motto || null }, up)).eq('id', sch.id); if (r1.error) { if (/motto/i.test(r1.error.message || '')) { must(await db.from('schools').update(up).eq('id', sch.id)); toast('Saved, but the motto needs SQL step 17 to be run first', true); } else throw r1.error; }
         A.dropSchool(); state.timeoutMin = v.inactivity_timeout_minutes || 15; toast(t('saved')); $('#sform', el).querySelector('button[type=submit]').disabled = false;
       } });
+    (async function () {
+      var box = $('#evc', el); if (!box) return;
+      var st = null; try { var r = await db.rpc('mail_status'); if (r.error) throw r.error; st = r.data; } catch (e) { box.querySelector('#evs').innerHTML = '<span class="err">Run SQL step 18 in Supabase first to use this. (' + esc(A.errText(e)) + ')</span>'; return; }
+      var on = !!sch.email_verify, cap = sch.email_codes_per_day || 30;
+      box.innerHTML = '<h4>📧 E-mail login code</h4><p class="muted sm">When ON, admin and teacher accounts must enter a 6-digit code sent to their e-mail, but only on a new device (or after re-installing the app). Currently: <b>' + (on ? 'ON' : 'OFF') + '</b>. Codes sent today: <b>' + st.sent_today + '</b>.</p>' +
+        '<label class="row" style="gap:8px;align-items:center;margin:8px 0"><input type="checkbox" id="evon"' + (on ? ' checked' : '') + '> <b>Require e-mail code (admin &amp; teachers)</b></label>' +
+        '<label>Maximum codes per day</label><input type="number" id="evcap" min="1" max="300" value="' + cap + '" style="width:100%;margin-bottom:8px">' +
+        '<p class="muted sm">Mail sender (free Brevo account, 300 mails/day): ' + (st.configured ? '✅ set up (' + esc(st.sender || '') + ')' : '⚠️ not set up yet') + '</p>' +
+        '<input type="password" id="evk" placeholder="Brevo API key (leave empty to keep the saved one)" style="width:100%;margin-bottom:6px"><input type="email" id="evm" placeholder="Sender e-mail (verified in Brevo)" value="' + esc(st.sender || '') + '" style="width:100%;margin-bottom:6px"><input type="text" id="evn" placeholder="Sender name, e.g. Amar School" style="width:100%;margin-bottom:8px">' +
+        '<button class="btn primary" id="evsave" style="width:100%">Save</button><button class="btn" id="evreset" style="width:100%;margin-top:8px">Reset trusted devices (everyone must verify again)</button>';
+      $('#evsave', box).onclick = async function () {
+        var b = this; b.disabled = true;
+        try {
+          if ($('#evk', box).value.trim() || $('#evm', box).value.trim()) must(await db.rpc('admin_set_mail', { p_key: $('#evk', box).value, p_sender: $('#evm', box).value, p_name: $('#evn', box).value }));
+          var want = $('#evon', box).checked; if (want && !st.configured && !($('#evk', box).value.trim() && $('#evm', box).value.trim())) { toast('Add the Brevo API key and sender e-mail first', true); b.disabled = false; return; }
+          must(await db.from('schools').update({ email_verify: want, email_codes_per_day: Math.max(1, Math.min(300, +$('#evcap', box).value || 30)) }).eq('id', sch.id)); A.dropSchool(); toast('✓ Saved'); V.settings(el);
+        } catch (e) { toast(A.errText(e), true); b.disabled = false; }
+      };
+      $('#evreset', box).onclick = async function () { if (!confirm('Everyone will have to enter an e-mail code again on their next login. Continue?')) return; try { must(await db.rpc('admin_reset_devices')); toast('✓ Done'); } catch (e) { toast(A.errText(e), true); } };
+    })();
     $('#grbtn', el).onclick = function () { A.push({ title: function () { return t('grading_rules'); }, render: A.V('gradingRules') }); };
     $('#pwbtn', el).onclick = function () { A.push({ title: function () { return t('change_password'); }, render: V.changePassword }); };
     $('#bkbtn', el).onclick = function () { A.push({ title: function () { return t('import_export'); }, render: A.V('dataHub') }); };
