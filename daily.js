@@ -724,16 +724,22 @@
       var on = !!sch.email_verify, cap = sch.email_codes_per_day || 30;
       box.innerHTML = '<h4>📧 E-mail login code</h4><p class="muted sm">When ON, admin and teacher accounts must enter a 6-digit code sent to their e-mail, but only on a new device (or after re-installing the app). Currently: <b>' + (on ? 'ON' : 'OFF') + '</b>. Codes sent today: <b>' + st.sent_today + '</b>.</p>' +
         '<label class="row" style="gap:8px;align-items:center;margin:8px 0"><input type="checkbox" id="evon"' + (on ? ' checked' : '') + '> <b>Require e-mail code (admin &amp; teachers)</b></label>' +
-        '<label>Maximum codes per day</label><input type="number" id="evcap" min="1" max="300" value="' + cap + '" style="width:100%;margin-bottom:8px">' +
-        '<p class="muted sm">Mail sender (free Brevo account, 300 mails/day): ' + (st.configured ? '✅ set up (' + esc(st.sender || '') + ')' : '⚠️ not set up yet') + '</p>' +
-        '<input type="password" id="evk" placeholder="Brevo API key (leave empty to keep the saved one)" style="width:100%;margin-bottom:6px"><input type="email" id="evm" placeholder="Sender e-mail (verified in Brevo)" value="' + esc(st.sender || '') + '" style="width:100%;margin-bottom:6px"><input type="text" id="evn" placeholder="Sender name, e.g. Amar School" style="width:100%;margin-bottom:8px">' +
+        '<label>Maximum codes per day</label><input type="number" id="evcap" min="1" max="100" value="' + cap + '" style="width:100%;margin-bottom:8px">' +
+        '<p class="muted sm"><b>Free Gmail sender</b> ' + (st.configured ? '✅ set up' : '⚠️ not set up yet') + '</p>' +
+        '<details' + (st.configured ? '' : ' open') + '><summary><b>Set up in 2 minutes</b></summary><ol class="muted sm" style="padding-left:18px;line-height:1.6"><li>Type any secret word below (e.g. amar2083xyz).</li><li>Tap <b>Copy script</b>.</li><li>Open <b>script.google.com</b> with the school Gmail → <b>New project</b> → delete the text → paste → <b>Save</b>.</li><li><b>Deploy → New deployment</b> → type <b>Web app</b> → Execute as <b>Me</b> → Who has access <b>Anyone</b> → Deploy → allow permissions (Advanced → Go to project).</li><li>Copy the <b>Web app URL</b> and paste it below. Tap Save.</li></ol></details>' +
+        '<input type="text" id="evs2" placeholder="Secret word" style="width:100%;margin:6px 0"><button class="btn" id="evcp" style="width:100%;margin-bottom:6px">Copy script</button><input type="url" id="evu" placeholder="Web app URL (https://script.google.com/macros/s/…/exec)" style="width:100%;margin-bottom:8px">' +
         '<button class="btn primary" id="evsave" style="width:100%">Save</button><button class="btn" id="evreset" style="width:100%;margin-top:8px">Reset trusted devices (everyone must verify again)</button>';
+      $('#evcp', box).onclick = function () {
+        var w = $('#evs2', box).value.trim(); if (!w) { toast('Type a secret word first', true); return; }
+        var code = "var SECRET = '" + w.replace(/['\\]/g, '') + "';\nfunction doPost(e) {\n  var d = JSON.parse(e.postData.contents);\n  if (d.secret !== SECRET) return ContentService.createTextOutput('no');\n  MailApp.sendEmail({ to: d.to, subject: d.subject, htmlBody: d.html, name: 'Amar School' });\n  return ContentService.createTextOutput('ok');\n}\n";
+        (navigator.clipboard ? navigator.clipboard.writeText(code) : Promise.reject()).then(function () { toast('✓ Script copied'); }, function () { prompt('Copy this script:', code); });
+      };
       $('#evsave', box).onclick = async function () {
-        var b = this; b.disabled = true;
+        var b = this, url = $('#evu', box).value.trim(), sec = $('#evs2', box).value.trim(); b.disabled = true;
         try {
-          if ($('#evk', box).value.trim() || $('#evm', box).value.trim()) must(await db.rpc('admin_set_mail', { p_key: $('#evk', box).value, p_sender: $('#evm', box).value, p_name: $('#evn', box).value }));
-          var want = $('#evon', box).checked; if (want && !st.configured && !($('#evk', box).value.trim() && $('#evm', box).value.trim())) { toast('Add the Brevo API key and sender e-mail first', true); b.disabled = false; return; }
-          must(await db.from('schools').update({ email_verify: want, email_codes_per_day: Math.max(1, Math.min(300, +$('#evcap', box).value || 30)) }).eq('id', sch.id)); A.dropSchool(); toast('✓ Saved'); V.settings(el);
+          if (url || sec) { if (url && !/^https:\/\/script\.google\.com\//.test(url)) throw { message: 'The URL must start with https://script.google.com/' }; must(await db.rpc('admin_set_mail', { p_url: url, p_secret: sec })); }
+          var want = $('#evon', box).checked; if (want && !st.configured && !(url && sec)) { toast('Set up the Gmail script first (secret word + URL)', true); b.disabled = false; return; }
+          must(await db.from('schools').update({ email_verify: want, email_codes_per_day: Math.max(1, Math.min(100, +$('#evcap', box).value || 30)) }).eq('id', sch.id)); A.dropSchool(); toast('✓ Saved'); V.settings(el);
         } catch (e) { toast(A.errText(e), true); b.disabled = false; }
       };
       $('#evreset', box).onclick = async function () { if (!confirm('Everyone will have to enter an e-mail code again on their next login. Continue?')) return; try { must(await db.rpc('admin_reset_devices')); toast('✓ Done'); } catch (e) { toast(A.errText(e), true); } };
