@@ -711,7 +711,7 @@
     el.innerHTML = '<div class="card"><h4>' + esc(t('school_fixed')) + '</h4><div class="muted">' + A.SCHOOL + '</div></div>' +
       '<div class="tabs"><button class="on">' + esc(t('school_profile')) + '</button></div><div id="sform"></div>' +
       '<div class="card" id="evc"><h4>📧 E-mail login code</h4><div class="muted sm" id="evs">Loading…</div></div>' +
-      '<button class="btn mb" id="grbtn">🏅 ' + esc(t('grading_rules')) + '</button><button class="btn mb" id="pwbtn">🔒 ' + esc(t('change_password')) + '</button><div class="card"><h4>' + esc(t('backup_title')) + '</h4><p class="muted sm">' + esc(t('backup_text')) + '</p><button class="btn small" id="bkbtn">📥 ' + esc(t('import_export')) + '</button></div>';
+      '<button class="btn mb" id="grbtn">🏅 ' + esc(t('grading_rules')) + '</button><button class="btn mb" id="slbtn">🧾 Grade sheet layout</button><button class="btn mb" id="pwbtn">🔒 ' + esc(t('change_password')) + '</button><div class="card"><h4>' + esc(t('backup_title')) + '</h4><p class="muted sm">' + esc(t('backup_text')) + '</p><button class="btn small" id="bkbtn">📥 ' + esc(t('import_export')) + '</button></div>';
     A.mountForm($('#sform', el), { fields: [{ name: 'motto', label: 'Motto (printed above the school name on grade sheets)' }, { name: 'address', label: 'address' }, { name: 'phone', label: 'phone' }, { name: 'email', label: 'email' }, { name: 'principal_name', label: 'principal_name' },
       { name: 'inactivity_timeout_minutes', label: 'timeout_info', type: 'number' }], values: sch, onSubmit: async function (v) {
         if (v.inactivity_timeout_minutes !== null && (v.inactivity_timeout_minutes < 1 || v.inactivity_timeout_minutes > 240)) throw new Error('1 - 240');
@@ -744,6 +744,7 @@
       };
       $('#evreset', box).onclick = async function () { if (!confirm('Everyone will have to enter an e-mail code again on their next login. Continue?')) return; try { must(await db.rpc('admin_reset_devices')); toast('✓ Done'); } catch (e) { toast(A.errText(e), true); } };
     })();
+    $('#slbtn', el).onclick = function () { A.push({ title: function () { return 'Grade sheet layout'; }, render: A.V('sheetLayout') }); };
     $('#grbtn', el).onclick = function () { A.push({ title: function () { return t('grading_rules'); }, render: A.V('gradingRules') }); };
     $('#pwbtn', el).onclick = function () { A.push({ title: function () { return t('change_password'); }, render: V.changePassword }); };
     $('#bkbtn', el).onclick = function () { A.push({ title: function () { return t('import_export'); }, render: A.V('dataHub') }); };
