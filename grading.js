@@ -60,6 +60,7 @@
     var pct = full > 0 ? round(obt / full * 100, 2) : 0;
     var gpa = credits > 0 ? round(gpSum / credits, dec) : 0;
     var complete = missing === 0 && subs.length > 0;
+    if (ng > 0 || subs.some(function (s) { return !s.missing && +s.gp === 0; })) gpa = 0;   // NG or 0 grade point in any subject -> GPA 0.00
     var overall = complete ? gradeFor(rule, pct) : null;
     return {
       subjects: subs, total_full: full, total_obtained: obt, percentage: pct,
