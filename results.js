@@ -29,6 +29,7 @@
     var subs = list.map(function (es) { return G.subjectResult(rule, es, mbs[es.subject_id]); }), full = 0, obt = 0, cr = 0, gs = 0, ng = 0, miss = 0, cnt = 0, sg = 0, nocr = !!(list.length && window.AMAR_NOCR[list[0].class_id]);
     subs.forEach(function (s) { if (s.missing) { miss++; return; } if (nocr) s.credit = 0; cnt++; sg += s.gp; full += s.full; obt += s.obtained; cr += s.credit; gs += s.gp * s.credit; if (!s.pass) ng++; });
     var pct = full > 0 ? G.round(obt / full * 100, 2) : 0, gpa = nocr ? (cnt ? G.round(sg / cnt, Number(rule.rounding) || 2) : 0) : (cr > 0 ? G.round(gs / cr, Number(rule.rounding) || 2) : 0), complete = miss === 0 && subs.length > 0;
+    if (ng > 0 || subs.some(function (s) { return !s.missing && +s.gp === 0; })) gpa = 0;   // NG or 0 grade point in any subject -> GPA 0.00
     return { subjects: subs, total_full: full, total_obtained: obt, percentage: pct, gpa: gpa, gpa_valid: complete && ng === 0, ng_count: ng, missing_count: miss, complete: complete,
       overall_grade: complete ? G.gradeFor(rule, pct).grade : null, result: !complete ? 'INCOMPLETE' : (ng === 0 ? 'PASS' : 'NG') };
   };
