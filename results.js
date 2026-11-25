@@ -127,17 +127,17 @@
 
   /* on-screen preview with Print button (no pop-up needed, works on phones) */
   function printSheets(html, title) {
-    var old = document.getElementById('shprev'); if (old) old.remove();
-    var o = document.createElement('div'); o.id = 'shprev';
-    o.innerHTML = '<style>' + CSS + '#shprev{position:fixed;inset:0;z-index:9999;background:#4a5568;overflow:auto;-webkit-overflow-scrolling:touch}#shprev .tb{position:sticky;top:0;z-index:2;display:flex;gap:8px;align-items:center;padding:8px 10px;background:#1b2b44;color:#fff;font:600 14px sans-serif}#shprev .tb span{flex:1}#shprev .tb button{border:0;border-radius:10px;padding:9px 16px;font:700 14px sans-serif}#shprev .wrap{width:198mm;margin:8px auto}#shprev .pg{background:#fff;margin-bottom:6px!important}@media print{body.printing>*{display:none!important}body.printing>#shprev{display:block!important;position:static!important;background:#fff!important;overflow:visible!important}#shprev .tb{display:none!important}#shprev .wrap{zoom:1!important;margin:0!important;width:198mm!important}#shprev .pg{margin-bottom:3mm!important}body.printing{background:#fff!important;width:auto!important}}</style>' +
-      '<div class="tb"><span>' + esc(title || 'Grade sheets') + '</span><button id="shp" style="background:#2f8fd0;color:#fff">🖨 Print</button><button id="shc" style="background:#fff;color:#1b2b44">Close</button></div><div class="wrap">' + html + '</div>';
-    document.body.appendChild(o);
-    var wrap = o.querySelector('.wrap'); fitSheets(wrap);
-    function scale() { var w = o.clientWidth - 16, nat = wrap.offsetWidth || 748; wrap.style.zoom = Math.min(1, w / nat); }
-    scale(); window.addEventListener('resize', scale);
-    function close() { window.removeEventListener('resize', scale); document.body.classList.remove('printing'); o.remove(); }
-    o.querySelector('#shc').onclick = close;
-    o.querySelector('#shp').onclick = function () { document.body.classList.add('printing'); setTimeout(function () { try { window.print(); } catch (e) { toast('Printing is not available here', true); } setTimeout(function () { document.body.classList.remove('printing'); }, 800); }, 100); };
+    var css = '<style>' + CSS.replace(/body\{[^}]*\}/, '.shw{font-family:"Times New Roman",Georgia,serif;color:#111}') + '.shw{width:198mm;margin:0 auto}.shw .pg{background:#fff;border:1px solid #cfd6df;margin-bottom:8px!important}@media print{.shw{zoom:1!important;width:198mm!important}.shw .pg{border:0!important;margin-bottom:3mm!important}}</style>';
+    var z0 = Math.min(1, (Math.min(window.innerWidth, document.documentElement.clientWidth || 9999) - 36) / 748);
+    A.printable(title || 'Grade sheets', css + '<div class="shw" style="zoom:' + z0 + '">' + html + '</div>');
+    var tries = 0;
+    (function fit() {
+      var w = document.querySelector('.shw');
+      if (!w) { if (tries++ < 20) setTimeout(fit, 100); return; }
+      try { fitSheets(w); } catch (e) {}
+      var nat = w.offsetWidth || 748, avail = Math.min(window.innerWidth, document.documentElement.clientWidth || 9999) - 36;
+      w.style.zoom = Math.min(1, avail / nat);
+    })();
   }
   /* shrink a sheet's content until it fits its half-page (used for preview and printing) */
   function fitSheets(root) { (root || document).querySelectorAll('.pg').forEach(function (pg) { var inn = pg.querySelector('.in'), z = 1; inn.style.zoom = 1; var n = 0; while (inn.scrollHeight > inn.clientHeight + 1 && z > .5 && n++ < 20) { z -= .03; inn.style.zoom = z; } }); }
