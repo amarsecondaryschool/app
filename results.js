@@ -129,7 +129,9 @@
   function printSheets(html, title) {
     var css = '<style>' + CSS.replace(/body\{[^}]*\}/, '.shw{font-family:"Times New Roman",Georgia,serif;color:#111}') + '.shw{width:198mm;margin:0 auto}.shw .pg{background:#fff;border:1px solid #cfd6df;margin-bottom:8px!important}@media print{.shw{zoom:1!important;width:198mm!important}.shw .pg{border:0!important;margin-bottom:3mm!important}}</style>';
     var z0 = Math.min(1, (Math.min(window.innerWidth, document.documentElement.clientWidth || 9999) - 36) / 748);
-    A.printable(title || 'Grade sheets', css + '<div class="shw" style="zoom:' + z0 + '">' + html + '</div>');
+    var body = css + '<div class="shw" style="zoom:' + z0 + '">' + html + '</div>';
+    if (A.printable) A.printable(title || 'Grade sheets', body);
+    else A.push({ title: function () { return title || 'Grade sheets'; }, render: function (el) { el.innerHTML = '<div class="noprint" style="margin-bottom:12px"><button class="btn primary" id="pbtn">Print / Save as PDF</button></div><div class="printable">' + body + '</div>'; $('#pbtn', el).onclick = function () { window.print(); }; } });
     var tries = 0;
     (function fit() {
       var w = document.querySelector('.shw');
@@ -242,7 +244,7 @@
       if (!lk.classes.length) { el.innerHTML = '<div class="empty">Only the class teacher can open the ledger and grade sheets of a class.</div>'; return; }
     }
     if (!exams.length || !lk.classes.length) { el.innerHTML = '<div class="empty">Open “Marks entry” once first (it creates the exams and subjects), and add classes.</div>'; return; }
-    el.innerHTML = '<div class="note">Pick an exam and a class. You can <b>print the grade sheets</b> (one page per student) or <b>download the ledger</b> (whole class in one Excel/CSV file).</div><select id="rx" class="search">' + exams.map(function (e) { return '<option value="' + e.id + '">' + esc(e.name) + '</option>'; }).join('') + '</select><select id="rc" class="search">' + lk.classes.map(function (c) { return '<option value="' + c.id + '">' + esc(A.nm(c)) + '</option>'; }).join('') + '</select><div id="ro"></div>';
+    el.innerHTML = '<div class="note">Pick an exam and a class. Tap <b>Print grade sheets</b> to see and print them (two per page), or tap one student to see only that sheet. You can also or <b>download the ledger</b> (whole class in one Excel/CSV file).</div><select id="rx" class="search">' + exams.map(function (e) { return '<option value="' + e.id + '">' + esc(e.name) + '</option>'; }).join('') + '</select><select id="rc" class="search">' + lk.classes.map(function (c) { return '<option value="' + c.id + '">' + esc(A.nm(c)) + '</option>'; }).join('') + '</select><div id="ro"></div>';
     async function draw() {
       var ex = exams.filter(function (e) { return e.id === $('#rx', el).value; })[0], mid = isMid(ex), box = $('#ro', el); box.innerHTML = '<div class="empty">Loading…</div>';
       try {
@@ -250,12 +252,14 @@
         if (!D.items.length) { box.innerHTML = '<div class="empty">No students in this class.</div>'; return; }
         box.innerHTML = '<div class="row" style="margin:10px 0"><button class="btn primary" id="rp">Print grade sheets</button><button class="btn" id="rl">Download ledger (Excel)</button></div>' +
           '<div class="muted sm">' + (D.rule.verified === false ? 'Grading table not verified – check Grading rules. ' : '') + (mid ? 'Mid-term: one grade per subject, half credit hours.' : 'Terminal: theory + internal marks, weighted by credit hours.') + '</div>' +
-          D.items.map(function (it) { var r = it.res; return '<div class="card row between"><div><b>' + esc(it.s.full_name) + '</b><div class="muted sm">' + (r.complete ? r.percentage + '% · GPA ' + f2(r.gpa) : 'Marks missing in ' + r.missing_count + ' subject(s)') + '</div></div><span class="chip ' + (r.result === 'PASS' ? 'ok' : 'bad') + '">' + (it.rank ? '#' + it.rank + ' ' : '') + r.result + '</span></div>'; }).join('');
+          D.items.map(function (it, ix) { var r = it.res; return '<div class="card row between" data-one="' + ix + '" style="cursor:pointer"><div><b>' + esc(it.s.full_name) + '</b><div class="muted sm">' + (r.complete ? r.percentage + '% · GPA ' + f2(r.gpa) : 'Marks missing in ' + r.missing_count + ' subject(s)') + '</div></div><span class="chip ' + (r.result === 'PASS' ? 'ok' : 'bad') + '">' + (it.rank ? '#' + it.rank + ' ' : '') + r.result + '</span></div>'; }).join('');
         var isT = A.state.profile.role === 'teacher';   // class teachers only view / print / download
         box.insertAdjacentHTML('afterbegin', (isT ? '' : '<div class="note">' + (D.pending ? '<b>' + D.pending + '</b> marks are waiting for approval. Results can be published only when all marks are approved.' : 'All marks are approved. You can publish the results to parents.') + '</div><div class="row" style="margin-bottom:10px">' + (D.pending ? '<button class="btn primary" id="rap" style="flex:1">Approve all marks</button>' : '') + '<button class="btn primary" id="rpub" style="flex:1">Publish to parents</button></div>'));
         if ($('#rap', box)) $('#rap', box).onclick = async function () { try { must(await db.from('marks').update({ status: 'approved' }).eq('exam_id', ex.id).in('student_id', D.sids)); toast('✓ Approved'); draw(); } catch (e) { toast(A.errText(e), true); } };
         if ($('#rpub', box)) $('#rpub', box).onclick = function () { V.gradeSheets(el); };
-        $('#rp', box).onclick = function () { printSheets(D.items.map(function (it) { return sheetHtml(D, ex, mid, it); }).join(''), 'Grade sheets – ' + (D.cls.name || '')); };
+        var showSheets = function (items) { try { printSheets(items.map(function (it) { return sheetHtml(D, ex, mid, it); }).join(''), 'Grade sheets – ' + (D.cls.name || '')); } catch (e) { toast('Grade sheet error: ' + (e && e.message || e), true); } };
+        $('#rp', box).onclick = function () { showSheets(D.items); };
+        box.querySelectorAll('[data-one]').forEach(function (c) { c.onclick = function () { showSheets([D.items[+c.getAttribute('data-one')]]); }; });
         $('#rl', box).onclick = async function () { try { await ledgerXlsx(D, ex); } catch (e) { toast(A.errText(e), true); } };
       } catch (e) { box.innerHTML = '<p class="err">' + esc(A.errText(e)) + '</p>'; }
     }
