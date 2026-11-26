@@ -245,11 +245,11 @@
     var lk = await A.lookups(true), exams = must(await db.from('exams').select('id,name,academic_year').order('created_at'));
     if (!exams.length) { el.innerHTML = '<div class="empty">Create an exam first (open “Marks entry” once).</div>'; return; }
     var classes = lk.classes.slice().sort(function (a, b) { return (a.level || 0) - (b.level || 0) || String(a.name).localeCompare(String(b.name)); });
-    el.innerHTML = '<div class="note">Symbol numbers are made for the whole exam. Press <b>Generate</b>, change any number if needed, then <b>Save</b>. They print on the grade sheets.</div>' +
-      '<select id="sx" class="search">' + exams.map(function (e) { return '<option value="' + e.id + '">' + esc(e.name) + '</option>'; }).join('') + '</select>' +
+    el.innerHTML = '<div class="note">Symbol numbers are made for the whole exam. Pick a class (or all classes), press <b>Generate</b>, change any number if needed, then <b>Save</b>. They print on the grade sheets.</div>' +
+      '<select id="sx" class="search">' + exams.map(function (e) { return '<option value="' + e.id + '">' + esc(e.name) + '</option>'; }).join('') + '</select><select id="scl" class="search"><option value="">All classes</option>' + classes.map(function (c) { return '<option value="' + c.id + '">' + esc(A.nm(c)) + '</option>'; }).join('') + '</select>' +
       '<div class="card"><div class="row" style="gap:8px"><div style="flex:1"><label>Start from</label><input id="sst" type="number" value="1001" style="width:100%"></div><div style="flex:1"><label>Prefix (optional)</label><input id="spf" type="text" placeholder="e.g. A-" style="width:100%"></div></div>' +
       '<label class="row" style="gap:8px;align-items:center;margin:8px 0"><input type="checkbox" id="spc"> Start every class from a new hundred (1001, 1101, 1201…)</label>' +
-      '<div class="row" style="gap:8px"><button class="btn" id="sgen" style="flex:1">⚙️ Generate for all students</button><button class="btn primary" id="ssv" style="flex:1">Save</button></div></div><div id="sl"></div>';
+      '<div class="row" style="gap:8px"><button class="btn" id="sgen" style="flex:1">⚙️ Generate</button><button class="btn primary" id="ssv" style="flex:1">Save</button></div></div><div id="sl"></div>';
     var studs = [], cur = {};
     async function draw() {
       var xid = $('#sx', el).value, sl = $('#sl', el); sl.innerHTML = '<div class="empty">Loading…</div>';
@@ -257,15 +257,17 @@
         studs = must(await db.from('students').select('id,full_name,roll_no,class_id').eq('status', 'active').order('roll_no').order('full_name'));
         cur = {}; must(await db.from('exam_symbols').select('student_id,symbol_no').eq('exam_id', xid)).forEach(function (r) { cur[r.student_id] = r.symbol_no; });
       } catch (e) { sl.innerHTML = '<p class="err">' + esc(/exam_symbols/i.test((e && e.message) || '') ? 'Run SQL step 20 in Supabase first.' : A.errText(e)) + '</p>'; return; }
-      sl.innerHTML = classes.map(function (c) {
+      var pick = $('#scl', el).value;
+      sl.innerHTML = classes.filter(function (c) { return !pick || c.id === pick; }).map(function (c) {
         var ss = studs.filter(function (s) { return s.class_id === c.id; }); if (!ss.length) return '';
         return '<h4 style="margin:14px 2px 6px">' + esc(A.nm(c)) + ' <span class="muted sm">(' + ss.length + ')</span></h4>' + ss.map(function (s) { return '<div class="card row between" style="gap:8px;padding:8px 12px"><div style="flex:1;min-width:0"><b>' + esc(s.full_name) + '</b><div class="muted sm">Roll ' + esc(s.roll_no || '-') + '</div></div><input class="sy" data-id="' + s.id + '" type="text" value="' + esc(cur[s.id] || '') + '" placeholder="—" style="width:110px;text-align:center;font-weight:700"></div>'; }).join('');
       }).join('') || '<div class="empty">No students.</div>';
     }
-    $('#sx', el).onchange = draw;
+    $('#sx', el).onchange = draw; $('#scl', el).onchange = function () { draw(); };
     $('#sgen', el).onclick = function () {
       var n = parseInt($('#sst', el).value, 10) || 1, pf = $('#spf', el).value || '', hund = $('#spc', el).checked, k = 0;
-      classes.forEach(function (c, ci) {
+      var pick = $('#scl', el).value;
+      classes.filter(function (c) { return !pick || c.id === pick; }).forEach(function (c, ci) {
         var ss = studs.filter(function (s) { return s.class_id === c.id; }); if (!ss.length) return;
         if (hund && k) n = (Math.floor((n - 1) / 100) + 1) * 100 + ((parseInt($('#sst', el).value, 10) || 1) % 100); k++;
         ss.sort(function (a, b) { return (parseInt(a.roll_no, 10) || 9999) - (parseInt(b.roll_no, 10) || 9999) || String(a.full_name).localeCompare(String(b.full_name)); }).forEach(function (s) { var i = el.querySelector('.sy[data-id="' + s.id + '"]'); if (i) i.value = pf + (n++); });
@@ -293,7 +295,7 @@
       if (!lk.classes.length) { el.innerHTML = '<div class="empty">Only the class teacher can open the ledger and grade sheets of a class.</div>'; return; }
     }
     if (!exams.length || !lk.classes.length) { el.innerHTML = '<div class="empty">Open “Marks entry” once first (it creates the exams and subjects), and add classes.</div>'; return; }
-    el.innerHTML = '<div class="note">Pick an exam and a class. Tap <b>Print grade sheets</b> to see and print them (two per page), or tap one student to see only that sheet. You can also or <b>download the ledger</b> (whole class in one Excel/CSV file).</div>' + (A.state.profile.role === 'admin' ? '<button class="btn" id="rsy" style="margin-bottom:8px">🔢 Symbol numbers (generate / edit)</button>' : '') + '<select id="rx" class="search">' + exams.map(function (e) { return '<option value="' + e.id + '">' + esc(e.name) + '</option>'; }).join('') + '</select><select id="rc" class="search">' + lk.classes.map(function (c) { return '<option value="' + c.id + '">' + esc(A.nm(c)) + '</option>'; }).join('') + '</select><div id="ro"></div>';
+    el.innerHTML = '<div class="note">Pick an exam and a class. Tap <b>Print grade sheets</b> to see and print them (two per page), or tap one student to see only that sheet. You can also or <b>download the ledger</b> (whole class in one Excel/CSV file).</div>'+'<select id="rx" class="search">' + exams.map(function (e) { return '<option value="' + e.id + '">' + esc(e.name) + '</option>'; }).join('') + '</select><select id="rc" class="search">' + lk.classes.map(function (c) { return '<option value="' + c.id + '">' + esc(A.nm(c)) + '</option>'; }).join('') + '</select><div id="ro"></div>';
     async function draw() {
       var ex = exams.filter(function (e) { return e.id === $('#rx', el).value; })[0], mid = isMid(ex), box = $('#ro', el); box.innerHTML = '<div class="empty">Loading…</div>';
       try {
@@ -312,7 +314,6 @@
         $('#rl', box).onclick = async function () { try { await ledgerXlsx(D, ex); } catch (e) { toast(A.errText(e), true); } };
       } catch (e) { box.innerHTML = '<p class="err">' + esc(A.errText(e)) + '</p>'; }
     }
-    if ($('#rsy', el)) $('#rsy', el).onclick = function () { A.push({ title: function () { return 'Symbol numbers'; }, render: A.V('symbolNos') }); };
     $('#rx', el).onchange = draw; $('#rc', el).onchange = draw; draw();
   };
   function isMid(e) { return /mid/i.test((e.name || '') + ' ' + (e.exam_type || '')); }
