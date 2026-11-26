@@ -62,9 +62,10 @@
     ess.sort(function (a, b) { var oa = window.AMAR_OPT[cid + '|' + a.subject_id] || 0, ob = window.AMAR_OPT[cid + '|' + b.subject_id] || 0; return oa - ob || (sn[a.subject_id].name < sn[b.subject_id].name ? -1 : 1); });
     var chosen = {}, any = {};
     try { if (studs.length) must(await db.from('student_optionals').select('student_id,subject_id').in('student_id', studs.map(function (s) { return s.id; }))).forEach(function (r) { chosen[r.student_id + '|' + r.subject_id] = 1; any[r.student_id] = 1; }); } catch (e) {}
+    var syms = {}; try { must(await db.from('exam_symbols').select('student_id,symbol_no').eq('exam_id', exam.id)).forEach(function (r) { syms[r.student_id] = r.symbol_no; }); } catch (e) {}
     var items = studs.map(function (s) {
       var list = any[s.id] ? ess.filter(function (es) { return !window.AMAR_OPT[cid + '|' + es.subject_id] || chosen[s.id + '|' + es.subject_id]; }).map(function (es) { return window.AMAR_OPT[cid + '|' + es.subject_id] ? Object.assign({}, es, { chosen: true }) : es; }) : ess;
-      return { s: s, res: G.studentResult(rule, list, mb[s.id] || {}) }; });
+      return { s: s, sym: syms[s.id] || '', res: G.studentResult(rule, list, mb[s.id] || {}) }; });
     G.rankAll(items);
     var byS = {}, subjRank = [];   // rank of every student in every subject (same marks = same rank) + subjects ranked by class average
     items.forEach(function (it) { it.res.subjects.forEach(function (sr) { if (sr.missing || sr.absent || !(sr.full > 0)) return; (byS[sr.subject_id] = byS[sr.subject_id] || []).push({ sr: sr, p: sr.obtained / sr.full }); }); });
@@ -105,7 +106,7 @@
     var gt = rule.rules.slice().sort(function (a, b) { return b.min - a.min; }), gr = gt.map(function (g, i) { var hi = i ? gt[i - 1].min : 100; return '<tr><td>' + (i + 1) + '</td><td>' + (i ? g.min + ' TO BELOW ' + hi : g.min + ' TO ' + hi) + '</td><td>' + g.grade + '</td><td>' + esc(String(g.desc || '').toUpperCase()) + '</td><td>' + (+g.gp).toFixed(1) + '</td></tr>'; }).join('');
     var det = L.showDetails ? '<table class="g"><tr><th colspan="5">DETAILS OF GRADE SHEET</th></tr><tr class="gh"><th>S.N.</th><th>ACHIEVEMENT IN PERCENT</th><th>GRADE</th><th>DESCRIPTION</th><th>GRADE POINT</th></tr>' + gr + '</table>' : '';
     var emis = L.showEmis && it.s.emis_no ? ' (' + esc(it.s.emis_no) + ')' : '', roll = L.showRoll && it.s.roll_no ? ' &nbsp; ROLL NO: <b>' + esc(it.s.roll_no) + '</b>' : '', rank = L.showRank && it.rank && r.complete ? ' &nbsp; RANK: <b>' + it.rank + '/' + D.items.length + '</b>' : '';
-    var sym = esc(it.s.admission_no || it.s.roll_no || (it.s.student_code || '').slice(-6)), issue = L.issueDate || (A.bs && A.today ? safe(function () { return A.bs(A.today()); }) : '');
+    var sym = esc(it.sym || it.s.admission_no || it.s.roll_no || (it.s.student_code || '').slice(-6)), issue = L.issueDate || (A.bs && A.today ? safe(function () { return A.bs(A.today()); }) : '');
     var logo = new URL('logo.png', location.href).href, notes = String(L.notes || '').split('\n').filter(Boolean).map(function (x) { return '<div>' + esc(x) + '</div>'; }).join('');
     var sig = function (key, lab, nm, extra) { return '<div class="sc">' + (nm ? '<div class="sn" data-lk="' + key + 'n">' + esc(nm) + '</div>' : '<div class="sn" data-lk="' + key + 'n">&nbsp;</div>') + '<div class="sl" data-lk="' + key + '">' + esc(lab) + '</div>' + (extra || '') + '</div>'; };
     var sigs = '<div class="sg">' + sig('sig1', L.sig1, L.sig1n) + sig('sig2', L.sig2, L.sig2n, L.showIssue ? '<div class="di" data-lk="issueDate">Date of Issue: ' + esc(issue) + '</div>' : '') + sig('sig3', L.sig3, L.sig3n) + '</div>';
@@ -237,6 +238,53 @@
     paint(); setTimeout(paint, 300);
   };
   A.sheetHtml = sheetHtml; A.SHEET_CSS = CSS; A.fitSheets = fitSheets; A.printSheets = printSheets; A.layOf = layOf; A.LAYDEF = LAYDEF; A.loadResults = load;
+
+  /* Symbol numbers: generate for every student of an exam, then edit any of them */
+  V.symbolNos = async function (el) {
+    A.skeleton(el);
+    var lk = await A.lookups(true), exams = must(await db.from('exams').select('id,name,academic_year').order('created_at'));
+    if (!exams.length) { el.innerHTML = '<div class="empty">Create an exam first (open “Marks entry” once).</div>'; return; }
+    var classes = lk.classes.slice().sort(function (a, b) { return (a.level || 0) - (b.level || 0) || String(a.name).localeCompare(String(b.name)); });
+    el.innerHTML = '<div class="note">Symbol numbers are made for the whole exam. Press <b>Generate</b>, change any number if needed, then <b>Save</b>. They print on the grade sheets.</div>' +
+      '<select id="sx" class="search">' + exams.map(function (e) { return '<option value="' + e.id + '">' + esc(e.name) + '</option>'; }).join('') + '</select>' +
+      '<div class="card"><div class="row" style="gap:8px"><div style="flex:1"><label>Start from</label><input id="sst" type="number" value="1001" style="width:100%"></div><div style="flex:1"><label>Prefix (optional)</label><input id="spf" type="text" placeholder="e.g. A-" style="width:100%"></div></div>' +
+      '<label class="row" style="gap:8px;align-items:center;margin:8px 0"><input type="checkbox" id="spc"> Start every class from a new hundred (1001, 1101, 1201…)</label>' +
+      '<div class="row" style="gap:8px"><button class="btn" id="sgen" style="flex:1">⚙️ Generate for all students</button><button class="btn primary" id="ssv" style="flex:1">Save</button></div></div><div id="sl"></div>';
+    var studs = [], cur = {};
+    async function draw() {
+      var xid = $('#sx', el).value, sl = $('#sl', el); sl.innerHTML = '<div class="empty">Loading…</div>';
+      try {
+        studs = must(await db.from('students').select('id,full_name,roll_no,class_id').eq('status', 'active').order('roll_no').order('full_name'));
+        cur = {}; must(await db.from('exam_symbols').select('student_id,symbol_no').eq('exam_id', xid)).forEach(function (r) { cur[r.student_id] = r.symbol_no; });
+      } catch (e) { sl.innerHTML = '<p class="err">' + esc(/exam_symbols/i.test((e && e.message) || '') ? 'Run SQL step 20 in Supabase first.' : A.errText(e)) + '</p>'; return; }
+      sl.innerHTML = classes.map(function (c) {
+        var ss = studs.filter(function (s) { return s.class_id === c.id; }); if (!ss.length) return '';
+        return '<h4 style="margin:14px 2px 6px">' + esc(A.nm(c)) + ' <span class="muted sm">(' + ss.length + ')</span></h4>' + ss.map(function (s) { return '<div class="card row between" style="gap:8px;padding:8px 12px"><div style="flex:1;min-width:0"><b>' + esc(s.full_name) + '</b><div class="muted sm">Roll ' + esc(s.roll_no || '-') + '</div></div><input class="sy" data-id="' + s.id + '" type="text" value="' + esc(cur[s.id] || '') + '" placeholder="—" style="width:110px;text-align:center;font-weight:700"></div>'; }).join('');
+      }).join('') || '<div class="empty">No students.</div>';
+    }
+    $('#sx', el).onchange = draw;
+    $('#sgen', el).onclick = function () {
+      var n = parseInt($('#sst', el).value, 10) || 1, pf = $('#spf', el).value || '', hund = $('#spc', el).checked, k = 0;
+      classes.forEach(function (c, ci) {
+        var ss = studs.filter(function (s) { return s.class_id === c.id; }); if (!ss.length) return;
+        if (hund && k) n = (Math.floor((n - 1) / 100) + 1) * 100 + ((parseInt($('#sst', el).value, 10) || 1) % 100); k++;
+        ss.sort(function (a, b) { return (parseInt(a.roll_no, 10) || 9999) - (parseInt(b.roll_no, 10) || 9999) || String(a.full_name).localeCompare(String(b.full_name)); }).forEach(function (s) { var i = el.querySelector('.sy[data-id="' + s.id + '"]'); if (i) i.value = pf + (n++); });
+      });
+      toast('Generated – check, then press Save');
+    };
+    $('#ssv', el).onclick = async function () {
+      var rows = [], seen = {}, dup = [], xid = $('#sx', el).value;
+      el.querySelectorAll('.sy').forEach(function (i) { var v = i.value.trim(); i.style.borderColor = ''; if (!v) return; if (seen[v]) { dup.push(v); i.style.borderColor = '#d33'; } seen[v] = 1; rows.push({ exam_id: xid, student_id: i.getAttribute('data-id'), symbol_no: v, updated_at: new Date().toISOString() }); });
+      if (dup.length && !confirm('Same symbol number used twice: ' + dup.slice(0, 5).join(', ') + '. Save anyway?')) return;
+      try {
+        var gone = []; el.querySelectorAll('.sy').forEach(function (i) { if (!i.value.trim() && cur[i.getAttribute('data-id')]) gone.push(i.getAttribute('data-id')); });
+        if (gone.length) must(await db.from('exam_symbols').delete().eq('exam_id', xid).in('student_id', gone));
+        if (rows.length) must(await db.from('exam_symbols').upsert(rows, { onConflict: 'exam_id,student_id' }));
+        toast('✓ Saved ' + rows.length + ' symbol numbers'); draw();
+      } catch (e) { toast(/exam_symbols/i.test((e && e.message) || '') ? 'Run SQL step 20 in Supabase first.' : A.errText(e), true); }
+    };
+    draw();
+  };
   V.resultsLedger = async function (el) {
     A.skeleton(el);
     var lk = await A.lookups(true), exams = must(await db.from('exams').select('id,name,exam_type,academic_year').order('created_at'));
@@ -245,7 +293,7 @@
       if (!lk.classes.length) { el.innerHTML = '<div class="empty">Only the class teacher can open the ledger and grade sheets of a class.</div>'; return; }
     }
     if (!exams.length || !lk.classes.length) { el.innerHTML = '<div class="empty">Open “Marks entry” once first (it creates the exams and subjects), and add classes.</div>'; return; }
-    el.innerHTML = '<div class="note">Pick an exam and a class. Tap <b>Print grade sheets</b> to see and print them (two per page), or tap one student to see only that sheet. You can also or <b>download the ledger</b> (whole class in one Excel/CSV file).</div><select id="rx" class="search">' + exams.map(function (e) { return '<option value="' + e.id + '">' + esc(e.name) + '</option>'; }).join('') + '</select><select id="rc" class="search">' + lk.classes.map(function (c) { return '<option value="' + c.id + '">' + esc(A.nm(c)) + '</option>'; }).join('') + '</select><div id="ro"></div>';
+    el.innerHTML = '<div class="note">Pick an exam and a class. Tap <b>Print grade sheets</b> to see and print them (two per page), or tap one student to see only that sheet. You can also or <b>download the ledger</b> (whole class in one Excel/CSV file).</div>' + (A.state.profile.role === 'admin' ? '<button class="btn" id="rsy" style="margin-bottom:8px">🔢 Symbol numbers (generate / edit)</button>' : '') + '<select id="rx" class="search">' + exams.map(function (e) { return '<option value="' + e.id + '">' + esc(e.name) + '</option>'; }).join('') + '</select><select id="rc" class="search">' + lk.classes.map(function (c) { return '<option value="' + c.id + '">' + esc(A.nm(c)) + '</option>'; }).join('') + '</select><div id="ro"></div>';
     async function draw() {
       var ex = exams.filter(function (e) { return e.id === $('#rx', el).value; })[0], mid = isMid(ex), box = $('#ro', el); box.innerHTML = '<div class="empty">Loading…</div>';
       try {
@@ -264,6 +312,7 @@
         $('#rl', box).onclick = async function () { try { await ledgerXlsx(D, ex); } catch (e) { toast(A.errText(e), true); } };
       } catch (e) { box.innerHTML = '<p class="err">' + esc(A.errText(e)) + '</p>'; }
     }
+    if ($('#rsy', el)) $('#rsy', el).onclick = function () { A.push({ title: function () { return 'Symbol numbers'; }, render: A.V('symbolNos') }); };
     $('#rx', el).onchange = draw; $('#rc', el).onchange = draw; draw();
   };
   function isMid(e) { return /mid/i.test((e.name || '') + ' ' + (e.exam_type || '')); }
